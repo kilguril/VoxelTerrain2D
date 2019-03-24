@@ -6,15 +6,8 @@ namespace VoxelTerrain2D
 {
     public abstract class VoxelChunk : MonoBehaviour
     {
-        public bool dirty;
-
-        protected int   m_fromX;
-        protected int   m_fromY;
-        protected int   m_sizeX;
-        protected int   m_sizeY;
+        protected ChunkedDataset< VoxelData >.DataChunk< VoxelData > m_data;
         protected float m_voxelSize;
-
-        protected Dataset< VoxelData > m_data;
 
         protected Mesh         m_mesh;
         protected MeshFilter   m_filter;
@@ -24,13 +17,9 @@ namespace VoxelTerrain2D
 
 
 
-        public void Initialize( Dataset< VoxelData > dataset, int fromX, int sizeX, int fromY, int sizeY, float voxelSize, Material fillMaterial )
+        public void Initialize( ChunkedDataset< VoxelData >.DataChunk< VoxelData > dataset, float voxelSize, Material fillMaterial )
         {
             m_data = dataset;
-            m_fromX = fromX;
-            m_fromY = fromY;
-            m_sizeX = sizeX;
-            m_sizeY = sizeY;
             m_voxelSize = voxelSize;
 
             // Initialize mesh
@@ -38,8 +27,8 @@ namespace VoxelTerrain2D
             m_mesh.name = name + "_Mesh";
             m_mesh.MarkDynamic();
 
-            float meshSizeX = sizeX * voxelSize;
-            float meshSizeY = sizeY * voxelSize;
+            float meshSizeX = dataset.width * voxelSize;
+            float meshSizeY = dataset.height * voxelSize;
             m_mesh.bounds = new Bounds(
                 new Vector3( meshSizeX / 2.0f, meshSizeY / 2.0f ),
                 new Vector3( meshSizeX, meshSizeY )

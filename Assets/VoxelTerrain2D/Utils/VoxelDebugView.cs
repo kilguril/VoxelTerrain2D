@@ -37,8 +37,8 @@ namespace VoxelTerrain2D.Utils
             if ( terrain == null ) { return; }
             if ( terrain.dataSource == null ) { return; }
 
-            float                voxelSize = terrain.voxelSize;
-            Dataset< VoxelData > data      = terrain.dataSource;
+            float                       voxelSize = terrain.voxelSize;
+            ChunkedDataset< VoxelData > data      = terrain.dataSource;
 
             Vector3 origin    = transform.position;
             Vector3 size      = Vector3.one * m_gizmoSize;

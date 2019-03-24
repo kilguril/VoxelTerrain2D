@@ -440,11 +440,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_initOnAwake: 1
-  m_isJobified: 1
-  m_width: 15
-  m_height: 15
+  m_width: 10
+  m_height: 10
   m_voxelSize: 1
-  m_chunkSize: 10
+  m_chunkSize: 3
   m_fillMaterial: {fileID: 2100000, guid: 8d836ae80f80d384897d74207d3b365d, type: 2}
 --- !u!4 &1252366207
 Transform:

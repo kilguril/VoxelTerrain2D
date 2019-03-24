@@ -23,10 +23,10 @@ namespace VoxelTerrain2D
 
         void LateUpdate()
         {
-            if ( dirty == true )
+            if ( m_data.dirty == true )
             {
                 RebuildMesh();
-                dirty = false;
+                m_data.dirty = false;
             }
         }
 
@@ -50,17 +50,14 @@ namespace VoxelTerrain2D
             int         dataWidth = m_data.width;
             VoxelData[] dataset   = m_data.data;
 
-            for( int y = 0; y < m_sizeY - 1; y++ )
+            for( int y = 0; y < m_data.height - 1; y++ )
             {
-                for( int x = 0; x < m_sizeX - 1; x++ )
+                for( int x = 0; x < m_data.width - 1; x++ )
                 {
-                    int fx = m_fromX + x;
-                    int fy = m_fromY + y;
-
-                    VoxelData bottomLeft  = dataset[ fy * dataWidth + fx ];              // v = 1
-                    VoxelData bottomRight = dataset[ fy * dataWidth + fx + 1];           // v = 2
-                    VoxelData topRight    = dataset[ ( fy + 1 ) * dataWidth + fx + 1 ];  // v = 4
-                    VoxelData topLeft     = dataset[ ( fy + 1 ) * dataWidth + fx ];      // v = 8
+                    VoxelData bottomLeft  = dataset[ y * dataWidth + x ];              // v = 1
+                    VoxelData bottomRight = dataset[ y * dataWidth + x + 1];           // v = 2
+                    VoxelData topRight    = dataset[ ( y + 1 ) * dataWidth + x + 1 ];  // v = 4
+                    VoxelData topLeft     = dataset[ ( y + 1 ) * dataWidth + x ];      // v = 8
 
                     byte index = 0;
                     if ( ( bottomLeft.cell & VoxelData.CELL_MASK_SOLID ) > 0 ) { index |= ( 1 << 0 ); }
@@ -68,7 +65,7 @@ namespace VoxelTerrain2D
                     if ( ( topRight.cell & VoxelData.CELL_MASK_SOLID ) > 0  )   { index |= ( 1 << 2 ); }
                     if ( ( topLeft.cell & VoxelData.CELL_MASK_SOLID ) > 0  )    { index |= ( 1 << 3 ); }
 
-                    int i =  y * ( m_sizeX - 1 ) + x;
+                    int i =  y * ( m_data.width - 1 ) + x;
                     
                     float x0 = x * m_voxelSize;
                     float x1 = ( x + 1 ) * m_voxelSize;
