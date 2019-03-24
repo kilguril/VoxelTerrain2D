@@ -15,6 +15,9 @@ namespace VoxelTerrain2D
         [SerializeField]
         private bool m_initOnAwake = default( bool );
 
+        [SerializeField]
+        private bool m_threadedMeshing = default( bool );
+
         [Header("Voxel Settings")]
         [SerializeField]
         private int m_width        = default( int );
@@ -58,6 +61,7 @@ namespace VoxelTerrain2D
                     if ( chunk.width > 1 && chunk.height > 1 )
                     {
                         GameObject go = new GameObject(string.Format("Chunk[{0},{1}]", x, y ) );
+                        go.hideFlags = HideFlags.HideAndDontSave;
 
                         go.transform.parent = transform;
                         go.transform.localRotation = Quaternion.identity;
@@ -70,7 +74,15 @@ namespace VoxelTerrain2D
                         );
 
                         VoxelChunk vchunk = null;
-                        vchunk = go.AddComponent<SimpleVoxelChunk>();
+
+                        if ( m_threadedMeshing == true )
+                        {
+                            vchunk = go.AddComponent<ThreadedVoxelChunk>();
+                        }
+                        else
+                        {
+                            vchunk = go.AddComponent<SimpleVoxelChunk>();
+                        }
 
                         m_chunks[ y * m_dataSource.chunkCountX + x ] = vchunk;
                         vchunk.Initialize( chunk, voxelSize, m_fillMaterial );

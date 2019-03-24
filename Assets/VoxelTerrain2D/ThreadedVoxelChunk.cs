@@ -1,15 +1,20 @@
-﻿using System.Collections;
+﻿using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using UnityEngine;
 
 
 namespace VoxelTerrain2D
 {
-    public sealed class SimpleVoxelChunk : VoxelChunk
+    public sealed class ThreadedVoxelChunk : VoxelChunk
     {
         private List< Vector3 > m_verts;
         private List< int >     m_tris;
         private bool[]          m_batched;
+
+        private VoxelData[]     m_readBuffer;
+        private Task            m_remeshTask;
+
 
         protected override void OnInitialized()
         {
@@ -18,10 +23,25 @@ namespace VoxelTerrain2D
             m_tris  = new List< int >();
 
             // Initialize temp buffers
+            m_readBuffer = new VoxelData[ m_data.width * m_data.height ];
             m_batched = new bool[ m_data.width * m_data.height ];
 
             // Rebuild initial state
-            RebuildMesh();
+            ClearBuffers();
+            GenerateMesh( m_data.data, m_data.width, m_data.height, m_verts, m_tris, m_batched );
+            AssignMeshData();
+        }
+
+
+        void Update()
+        {
+            if ( m_remeshTask != null )
+            {
+                m_remeshTask.Wait();
+                m_remeshTask = null;
+
+                AssignMeshData();
+            }
         }
 
 
@@ -29,16 +49,19 @@ namespace VoxelTerrain2D
         {
             if ( m_data.dirty == true )
             {
-                RebuildMesh();
+                ClearBuffers();
+                Array.Copy( m_data.data, m_readBuffer, m_data.data.Length );
+
+                m_remeshTask = new Task( RebuildMesh );
+                m_remeshTask.Start();
+
                 m_data.dirty = false;
             }
         }
 
         private void RebuildMesh()
         {
-            ClearBuffers();
-            GenerateMesh( m_data.data, m_data.width, m_data.height, m_verts, m_tris, m_batched );
-            AssignMeshData();
+            GenerateMesh( m_readBuffer, m_data.width, m_data.height, m_verts, m_tris, m_batched );
         }
 
 
