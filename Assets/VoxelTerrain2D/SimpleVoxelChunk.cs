@@ -9,12 +9,16 @@ namespace VoxelTerrain2D
     {
         private List< Vector3 > m_verts;
         private List< int >     m_tris;
+        private bool[]          m_batched;
 
         protected override void OnInitialized()
         {
             // Initialize chunk data
             m_verts = new List< Vector3 >();
             m_tris  = new List< int >();
+
+            // Initialize temp buffers
+            m_batched = new bool[ m_data.width * m_data.height ];
 
             // Rebuild initial state
             RebuildMesh();
@@ -42,6 +46,8 @@ namespace VoxelTerrain2D
         {
             m_verts.Clear();
             m_tris.Clear();
+
+            for ( int i = 0; i < m_batched.Length; i++ ) { m_batched[ i ] = false; }
         }
 
 
@@ -54,6 +60,8 @@ namespace VoxelTerrain2D
             {
                 for( int x = 0; x < m_data.width - 1; x++ )
                 {
+                    if ( m_batched[ y * dataWidth + x ] == true ) { continue; } // Cell is already a part of existing batch, skip it...
+
                     VoxelData bottomLeft  = dataset[ y * dataWidth + x ];              // v = 1
                     VoxelData bottomRight = dataset[ y * dataWidth + x + 1];           // v = 2
                     VoxelData topRight    = dataset[ ( y + 1 ) * dataWidth + x + 1 ];  // v = 4
@@ -484,30 +492,121 @@ namespace VoxelTerrain2D
 
                         case 15:
                         {
-                            Vector3 v0 = new Vector3( x0, y0 );
-                            Vector3 v1 = new Vector3( x0, y1 );
-                            Vector3 v2 = new Vector3( x1, y1 );
-                            Vector3 v3 = new Vector3( x1, y0 );
+                            if ( topLeft.CompareWithoutExtent( bottomLeft ) && topRight.CompareWithoutExtent( bottomRight ) && bottomLeft.CompareWithoutExtent( bottomRight ) )
+                            {
+                                GenerateGreedyQuad( x, y );
+                            }
+                            else
+                            {
+                                Vector3 v0 = new Vector3( x0, y0 );
+                                Vector3 v1 = new Vector3( x0, y1 );
+                                Vector3 v2 = new Vector3( x1, y1 );
+                                Vector3 v3 = new Vector3( x1, y0 );
 
-                            int vcount = m_verts.Count;
-            
-                            m_verts.Add( v0 );
-                            m_verts.Add( v1 );
-                            m_verts.Add( v2 );
-                            m_verts.Add( v3 );
+                                int vcount = m_verts.Count;
 
-                            m_tris.Add( vcount );
-                            m_tris.Add( vcount + 1 );
-                            m_tris.Add( vcount + 2 );
+                                m_verts.Add( v0 );
+                                m_verts.Add( v1 );
+                                m_verts.Add( v2 );
+                                m_verts.Add( v3 );
 
-                            m_tris.Add( vcount );
-                            m_tris.Add( vcount + 2 );
-                            m_tris.Add( vcount + 3 );
+                                m_tris.Add( vcount );
+                                m_tris.Add( vcount + 1 );
+                                m_tris.Add( vcount + 2 );
+
+                                m_tris.Add( vcount );
+                                m_tris.Add( vcount + 2 );
+                                m_tris.Add( vcount + 3 );
+                            }
                         }
                         break;
                     }
                 }
             }
+        }
+
+        private void GenerateGreedyQuad( int x, int y )
+        {
+            int startX = x;
+            int startY = y;
+            int endX   = x;
+            int endY   = y;
+
+            int         dataWidth = m_data.width;
+            VoxelData[] dataset   = m_data.data;
+            VoxelData   compare   = dataset[ y * dataWidth + x ];
+
+            for( int xx = x + 1; xx < dataWidth - 1; xx++ )
+            {
+                if ( m_batched[ y * dataWidth + xx ] == true ) { break; } // Encountered another batch, stop expanding
+
+                VoxelData a = dataset[ y * dataWidth + xx + 1];
+                VoxelData b = dataset[ ( y + 1 ) * dataWidth + xx + 1 ];
+
+                if ( compare.CompareWithoutExtent( a ) && compare.CompareWithoutExtent( b ) )
+                {
+                    endX = xx;
+                }
+                else{ break; } // Change in voxel data detected, stop extending
+            }
+
+            bool validUp = true;
+            for( int yy = y + 1; yy < m_data.height - 1 && validUp == true; yy++ )
+            {
+                for( int xx = startX; xx <= endX && validUp == true; xx++ )
+                {
+                    if ( m_batched[ yy * dataWidth + xx ] == true ) { validUp = false; break; } // Encountered another batch, stop expanding
+
+                    VoxelData a = dataset[ ( yy + 1 ) * dataWidth + xx + 1 ];
+                    VoxelData b = dataset[ ( yy + 1 ) * dataWidth + xx ];
+
+                    if ( compare.CompareWithoutExtent( a ) == false || compare.CompareWithoutExtent( b ) == false )
+                    {
+                        validUp = false;
+                        break;
+                    }
+                }
+
+                if ( validUp == true ) // Collect line
+                {
+                    endY = yy;
+                }
+            }
+
+            // Mark batch
+            for ( int yy = startY; yy <= endY; yy++ )
+            {
+                for ( int xx = startX; xx <= endX; xx++ )
+                {
+                    m_batched[ yy * dataWidth + xx ] = true;
+                }
+            }
+
+            // Build quad mesh data
+            float x0 = startX * m_voxelSize;
+            float x1 = ( endX + 1 ) * m_voxelSize;
+            float y0 = startY * m_voxelSize;
+            float y1 = ( endY + 1 ) * m_voxelSize;
+
+            Vector3 v0 = new Vector3( x0, y0 );
+            Vector3 v1 = new Vector3( x0, y1 );
+            Vector3 v2 = new Vector3( x1, y1 );
+            Vector3 v3 = new Vector3( x1, y0 );
+
+            int vcount = m_verts.Count;
+            
+            m_verts.Add( v0 );
+            m_verts.Add( v1 );
+            m_verts.Add( v2 );
+            m_verts.Add( v3 );
+
+            m_tris.Add( vcount );
+            m_tris.Add( vcount + 1 );
+            m_tris.Add( vcount + 2 );
+
+            m_tris.Add( vcount );
+            m_tris.Add( vcount + 2 );
+            m_tris.Add( vcount + 3 );
         }
 
 

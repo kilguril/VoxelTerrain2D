@@ -19,6 +19,12 @@ namespace VoxelTerrain2D
         public byte extentVertical;
 
 
+        public bool CompareWithoutExtent( VoxelData other )
+        {
+            return cell == other.cell;
+        }
+
+
         public bool GetSolidState()
         {
             return ( cell & CELL_MASK_SOLID ) > 0;
