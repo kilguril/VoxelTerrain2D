@@ -13,6 +13,9 @@ namespace VoxelTerrain2D.Utils
         private bool m_wireframe = default( bool );
 
         [SerializeField]
+        private bool m_renderExtents = default( bool );
+
+        [SerializeField]
         private bool m_renderWhenDeselected = default( bool );
 
 
@@ -71,7 +74,7 @@ namespace VoxelTerrain2D.Utils
                     Gizmos.color = col;
                     renderFunc( pos, size );
 
-                    if ( on )
+                    if ( on && m_renderExtents )
                     {
                         byte extentLeft  = val.GetExtentLeft();
                         byte extentRight = val.GetExtentRight();

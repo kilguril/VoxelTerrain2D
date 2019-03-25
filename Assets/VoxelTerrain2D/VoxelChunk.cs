@@ -2,33 +2,50 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+using DataChunk = VoxelTerrain2D.ChunkedDataset< VoxelTerrain2D.VoxelData >.DataChunk< VoxelTerrain2D.VoxelData >;
+
 namespace VoxelTerrain2D
 {
     public abstract class VoxelChunk : MonoBehaviour
     {
-        protected ChunkedDataset< VoxelData >.DataChunk< VoxelData > m_data;
-        protected float m_voxelSize;
+        protected class MeshOutput
+        {
+            public List< Vector3 >          verts;
+            public List< int >              tris;
+            public bool[]                   batched;
+
+            public List< List < Vector2 > > contours;
+
+            public List< Vector3 >          collisionVerts;
+            public List< int >              collisionTris;
+        }
+
+        protected DataChunk         m_data;
+        protected GeneratorSettings m_settings;
 
         protected Mesh         m_mesh;
         protected MeshFilter   m_filter;
         protected MeshRenderer m_renderer;
 
+        protected Mesh         m_meshCollision;
+        protected MeshCollider m_collider;
+
         protected bool         m_init = false;
 
 
 
-        public void Initialize( ChunkedDataset< VoxelData >.DataChunk< VoxelData > dataset, float voxelSize, Material fillMaterial )
+        public void Initialize( DataChunk dataset, GeneratorSettings settings )
         {
-            m_data = dataset;
-            m_voxelSize = voxelSize;
+            m_data     = dataset;
+            m_settings = settings;
 
             // Initialize mesh
             m_mesh      = new Mesh();
             m_mesh.name = name + "_Mesh";
             m_mesh.MarkDynamic();
 
-            float meshSizeX = dataset.width * voxelSize;
-            float meshSizeY = dataset.height * voxelSize;
+            float meshSizeX = dataset.width * m_settings.voxelSize;
+            float meshSizeY = dataset.height * m_settings.voxelSize;
             m_mesh.bounds = new Bounds(
                 new Vector3( meshSizeX / 2.0f, meshSizeY / 2.0f ),
                 new Vector3( meshSizeX, meshSizeY )
@@ -38,7 +55,21 @@ namespace VoxelTerrain2D
             m_renderer = gameObject.AddComponent< MeshRenderer >();
 
             m_filter.sharedMesh       = m_mesh;
-            m_renderer.sharedMaterial = fillMaterial;
+            m_renderer.sharedMaterial = m_settings.fillMaterial;
+
+            if ( m_settings.generateCollision )
+            {
+                m_meshCollision = new Mesh();
+                m_meshCollision.name = name + "_CollisionMesh";
+                m_meshCollision.MarkDynamic();
+
+                m_meshCollision.bounds = m_mesh.bounds;
+
+                m_collider = gameObject.AddComponent< MeshCollider >();
+                m_collider.sharedMesh = m_meshCollision;
+                m_collider.convex = false;
+                m_collider.cookingOptions = m_settings.colliderCookingOptions;
+            }
 
             OnInitialized();
             m_init = true;
@@ -48,13 +79,18 @@ namespace VoxelTerrain2D
         protected abstract void OnInitialized();
 
 
-        protected void GenerateMesh( VoxelData[] dataset, int dataWidth, int dataHeight, List< Vector3 > verts, List< int > tris, bool[] batched )
+        protected void GenerateMesh( DataChunk i, MeshOutput o )
         {
+            VoxelData[] dataset = i.data;
+            int   dataWidth     = i.width;
+            int   dataHeight    = i.height;
+            float voxelSize     = m_settings.voxelSize;
+
             for( int y = 0; y < dataHeight - 1; y++ )
             {
                 for( int x = 0; x < dataWidth - 1; x++ )
                 {
-                    if ( batched[ y * dataWidth + x ] == true ) { continue; } // Cell is already a part of existing batch, skip it...
+                    if ( o.batched[ y * dataWidth + x ] == true ) { continue; } // Cell is already a part of existing batch, skip it...
 
                     VoxelData bottomLeft  = dataset[ y * dataWidth + x ];              // v = 1
                     VoxelData bottomRight = dataset[ y * dataWidth + x + 1];           // v = 2
@@ -67,12 +103,10 @@ namespace VoxelTerrain2D
                     if ( ( topRight.cell & VoxelData.CELL_MASK_SOLID ) > 0  )   { index |= ( 1 << 2 ); }
                     if ( ( topLeft.cell & VoxelData.CELL_MASK_SOLID ) > 0  )    { index |= ( 1 << 3 ); }
 
-                    int i =  y * ( dataWidth - 1 ) + x;
-                    
-                    float x0 = x * m_voxelSize;
-                    float x1 = ( x + 1 ) * m_voxelSize;
-                    float y0 = y * m_voxelSize;
-                    float y1 = ( y + 1 ) * m_voxelSize;
+                    float x0 = x * voxelSize;
+                    float x1 = ( x + 1 ) * voxelSize;
+                    float y0 = y * voxelSize;
+                    float y1 = ( y + 1 ) * voxelSize;
 
                     switch( index )
                     {
@@ -80,100 +114,108 @@ namespace VoxelTerrain2D
 
                         case 1:
                         { 
-                            float xstep = bottomLeft.GetExtentRightNormalized() * m_voxelSize;
-                            float ystep = bottomLeft.GetExtentTopNormalized() * m_voxelSize;
+                            float xstep = bottomLeft.GetExtentRightNormalized() * voxelSize;
+                            float ystep = bottomLeft.GetExtentTopNormalized() * voxelSize;
 
                             Vector3 v0 = new Vector3( x0, y0 );
                             Vector3 v1 = new Vector3( x0, y0 + ystep );
                             Vector3 v2 = new Vector3( x0 + xstep, y0 );
 
-                            int vcount = verts.Count;
+                            int vcount = o.verts.Count;
             
-                            verts.Add( v0 );
-                            verts.Add( v1 );
-                            verts.Add( v2 );
+                            o.verts.Add( v0 );
+                            o.verts.Add( v1 );
+                            o.verts.Add( v2 );
 
-                            tris.Add( vcount );
-                            tris.Add( vcount + 1 );
-                            tris.Add( vcount + 2 );
+                            o.tris.Add( vcount );
+                            o.tris.Add( vcount + 1 );
+                            o.tris.Add( vcount + 2 );
+
+                            AppendContour( v1, v2, o );
                         }
                         break;
 
                         case 2: 
                         { 
-                            float xstep = bottomRight.GetExtentLeftNormalized() * m_voxelSize;
-                            float ystep = bottomRight.GetExtentTopNormalized() * m_voxelSize;
+                            float xstep = bottomRight.GetExtentLeftNormalized() * voxelSize;
+                            float ystep = bottomRight.GetExtentTopNormalized() * voxelSize;
 
                             Vector3 v0 = new Vector3( x1 - xstep, y0 );
                             Vector3 v1 = new Vector3( x1, y0 + ystep );
                             Vector3 v2 = new Vector3( x1, y0 );
 
-                            int vcount = verts.Count;
+                            int vcount = o.verts.Count;
             
-                            verts.Add( v0 );
-                            verts.Add( v1 );
-                            verts.Add( v2 );
+                            o.verts.Add( v0 );
+                            o.verts.Add( v1 );
+                            o.verts.Add( v2 );
 
-                            tris.Add( vcount );
-                            tris.Add( vcount + 1 );
-                            tris.Add( vcount + 2 );
+                            o.tris.Add( vcount );
+                            o.tris.Add( vcount + 1 );
+                            o.tris.Add( vcount + 2 );
+
+                            AppendContour( v0, v1, o );
                         }
                         break;
 
                         case 3: 
                         {
-                            float ystep = bottomLeft.GetExtentTopNormalized() * m_voxelSize;
-                            float ystep2 = bottomRight.GetExtentTopNormalized() * m_voxelSize;
+                            float ystep = bottomLeft.GetExtentTopNormalized() * voxelSize;
+                            float ystep2 = bottomRight.GetExtentTopNormalized() * voxelSize;
 
                             Vector3 v0 = new Vector3( x0, y0 );
                             Vector3 v1 = new Vector3( x0, y0 + ystep );
                             Vector3 v2 = new Vector3( x1, y0 + ystep2 );
                             Vector3 v3 = new Vector3( x1, y0);
 
-                            int vcount = verts.Count;
+                            int vcount = o.verts.Count;
             
-                            verts.Add( v0 );
-                            verts.Add( v1 );
-                            verts.Add( v2 );
-                            verts.Add( v3 );
+                            o.verts.Add( v0 );
+                            o.verts.Add( v1 );
+                            o.verts.Add( v2 );
+                            o.verts.Add( v3 );
 
-                            tris.Add( vcount );
-                            tris.Add( vcount + 1 );
-                            tris.Add( vcount + 2 );
+                            o.tris.Add( vcount );
+                            o.tris.Add( vcount + 1 );
+                            o.tris.Add( vcount + 2 );
 
-                            tris.Add( vcount );
-                            tris.Add( vcount + 2 );
-                            tris.Add( vcount + 3 );
+                            o.tris.Add( vcount );
+                            o.tris.Add( vcount + 2 );
+                            o.tris.Add( vcount + 3 );
+
+                            AppendContour( v1, v2, o );
                         }
                         break;
 
                         case 4:
                         {
-                            float xstep = topRight.GetExtentLeftNormalized() * m_voxelSize;
-                            float ystep = topRight.GetExtentBottomNormalized() * m_voxelSize;
+                            float xstep = topRight.GetExtentLeftNormalized() * voxelSize;
+                            float ystep = topRight.GetExtentBottomNormalized() * voxelSize;
 
                             Vector3 v0 = new Vector3( x1, y1 );
                             Vector3 v1 = new Vector3( x1, y1 - ystep );
                             Vector3 v2 = new Vector3( x1 - xstep, y1 );
 
-                            int vcount = verts.Count;
+                            int vcount = o.verts.Count;
             
-                            verts.Add( v0 );
-                            verts.Add( v1 );
-                            verts.Add( v2 );
+                            o.verts.Add( v0 );
+                            o.verts.Add( v1 );
+                            o.verts.Add( v2 );
 
-                            tris.Add( vcount );
-                            tris.Add( vcount + 1 );
-                            tris.Add( vcount + 2 );
+                            o.tris.Add( vcount );
+                            o.tris.Add( vcount + 1 );
+                            o.tris.Add( vcount + 2 );
+
+                            AppendContour( v1, v2, o );
                         }
                         break;
 
                         case 5:
                         {
-                            float xstep  = bottomLeft.GetExtentRightNormalized() * m_voxelSize;
-                            float ystep  = bottomLeft.GetExtentTopNormalized() * m_voxelSize;
-                            float xstep2 = topRight.GetExtentLeftNormalized() * m_voxelSize;
-                            float ystep2 = topRight.GetExtentBottomNormalized() * m_voxelSize;
+                            float xstep  = bottomLeft.GetExtentRightNormalized() * voxelSize;
+                            float ystep  = bottomLeft.GetExtentTopNormalized() * voxelSize;
+                            float xstep2 = topRight.GetExtentLeftNormalized() * voxelSize;
+                            float ystep2 = topRight.GetExtentBottomNormalized() * voxelSize;
 
                             Vector3 v0 = new Vector3( x0, y0 );
                             Vector3 v1 = new Vector3( x0, y0 + ystep );
@@ -182,64 +224,69 @@ namespace VoxelTerrain2D
                             Vector3 v4 = new Vector3( x1, y1 );
                             Vector3 v5 = new Vector3( x1, y1 - ystep2 );
 
-                            int vcount = verts.Count;
+                            int vcount = o.verts.Count;
             
-                            verts.Add( v0 );
-                            verts.Add( v1 );
-                            verts.Add( v2 );
-                            verts.Add( v3 );
-                            verts.Add( v4 );
-                            verts.Add( v5 );
+                            o.verts.Add( v0 );
+                            o.verts.Add( v1 );
+                            o.verts.Add( v2 );
+                            o.verts.Add( v3 );
+                            o.verts.Add( v4 );
+                            o.verts.Add( v5 );
 
-                            tris.Add( vcount );
-                            tris.Add( vcount + 1 );
-                            tris.Add( vcount + 2 );
+                            o.tris.Add( vcount );
+                            o.tris.Add( vcount + 1 );
+                            o.tris.Add( vcount + 2 );
 
-                            tris.Add( vcount + 3 );
-                            tris.Add( vcount + 4 );
-                            tris.Add( vcount + 5 );
+                            o.tris.Add( vcount + 3 );
+                            o.tris.Add( vcount + 4 );
+                            o.tris.Add( vcount + 5 );
 
-                            tris.Add( vcount + 1 );
-                            tris.Add( vcount + 3 );
-                            tris.Add( vcount + 2 );
+                            o.tris.Add( vcount + 1 );
+                            o.tris.Add( vcount + 3 );
+                            o.tris.Add( vcount + 2 );
 
-                            tris.Add( vcount + 2 );
-                            tris.Add( vcount + 3 );
-                            tris.Add( vcount + 5 );
+                            o.tris.Add( vcount + 2 );
+                            o.tris.Add( vcount + 3 );
+                            o.tris.Add( vcount + 5 );
+
+                            AppendContour( v1, v3, o );
+                            AppendContour( v5, v2, o );
                         }
                         break;
 
                         case 6:
                         {
-                            float xstep = topRight.GetExtentLeftNormalized() * m_voxelSize;
-                            float xstep2 = bottomRight.GetExtentLeftNormalized() * m_voxelSize;
+                            float xstep = topRight.GetExtentLeftNormalized() * voxelSize;
+                            float xstep2 = bottomRight.GetExtentLeftNormalized() * voxelSize;
 
                             Vector3 v0 = new Vector3( x1 - xstep2, y0 );
                             Vector3 v1 = new Vector3( x1 - xstep, y1 );
                             Vector3 v2 = new Vector3( x1, y1 );
                             Vector3 v3 = new Vector3( x1, y0 );
 
-                            int vcount = verts.Count;
+                            int vcount = o.verts.Count;
             
-                            verts.Add( v0 );
-                            verts.Add( v1 );
-                            verts.Add( v2 );
-                            verts.Add( v3 );
+                            o.verts.Add( v0 );
+                            o.verts.Add( v1 );
+                            o.verts.Add( v2 );
+                            o.verts.Add( v3 );
 
-                            tris.Add( vcount );
-                            tris.Add( vcount + 1 );
-                            tris.Add( vcount + 2 );
+                            o.tris.Add( vcount );
+                            o.tris.Add( vcount + 1 );
+                            o.tris.Add( vcount + 2 );
 
-                            tris.Add( vcount );
-                            tris.Add( vcount + 2 );
-                            tris.Add( vcount + 3 );
+                            o.tris.Add( vcount );
+                            o.tris.Add( vcount + 2 );
+                            o.tris.Add( vcount + 3 );
+
+                            AppendContour( v0, v1, o );
                         }
                         break;
 
                         case 7:
                         {
-                            float xstep = topRight.GetExtentLeftNormalized() * m_voxelSize;
-                            float ystep = bottomLeft.GetExtentTopNormalized() * m_voxelSize;
+                            float xstep = topRight.GetExtentLeftNormalized() * voxelSize;
+                            float ystep = bottomLeft.GetExtentTopNormalized() * voxelSize;
 
                             Vector3 v0 = new Vector3( x0, y0 );
                             Vector3 v1 = new Vector3( x0, y0 + ystep );
@@ -247,82 +294,88 @@ namespace VoxelTerrain2D
                             Vector3 v3 = new Vector3( x1, y1);
                             Vector3 v4 = new Vector3( x1, y0 );
 
-                            int vcount = verts.Count;
+                            int vcount = o.verts.Count;
             
-                            verts.Add( v0 );
-                            verts.Add( v1 );
-                            verts.Add( v2 );
-                            verts.Add( v3 );
-                            verts.Add( v4 );
+                            o.verts.Add( v0 );
+                            o.verts.Add( v1 );
+                            o.verts.Add( v2 );
+                            o.verts.Add( v3 );
+                            o.verts.Add( v4 );
 
-                            tris.Add( vcount );
-                            tris.Add( vcount + 1 );
-                            tris.Add( vcount + 4 );
+                            o.tris.Add( vcount );
+                            o.tris.Add( vcount + 1 );
+                            o.tris.Add( vcount + 4 );
 
-                            tris.Add( vcount + 4 );
-                            tris.Add( vcount + 1 );
-                            tris.Add( vcount + 2 );
+                            o.tris.Add( vcount + 4 );
+                            o.tris.Add( vcount + 1 );
+                            o.tris.Add( vcount + 2 );
 
-                            tris.Add( vcount + 4 );
-                            tris.Add( vcount + 2 );
-                            tris.Add( vcount + 3 );
+                            o.tris.Add( vcount + 4 );
+                            o.tris.Add( vcount + 2 );
+                            o.tris.Add( vcount + 3 );
+
+                            AppendContour( v1, v2, o );
                         }
                         break;
 
                         case 8:
                         {
-                            float xstep = topLeft.GetExtentRightNormalized() * m_voxelSize;
-                            float ystep = topLeft.GetExtentBottomNormalized() * m_voxelSize;
+                            float xstep = topLeft.GetExtentRightNormalized() * voxelSize;
+                            float ystep = topLeft.GetExtentBottomNormalized() * voxelSize;
 
                             Vector3 v0 = new Vector3( x0, y1 - ystep );
                             Vector3 v1 = new Vector3( x0, y1 );
                             Vector3 v2 = new Vector3( x0 + xstep, y1 );
 
-                            int vcount = verts.Count;
+                            int vcount = o.verts.Count;
             
-                            verts.Add( v0 );
-                            verts.Add( v1 );
-                            verts.Add( v2 );
+                            o.verts.Add( v0 );
+                            o.verts.Add( v1 );
+                            o.verts.Add( v2 );
 
-                            tris.Add( vcount );
-                            tris.Add( vcount + 1 );
-                            tris.Add( vcount + 2 );
+                            o.tris.Add( vcount );
+                            o.tris.Add( vcount + 1 );
+                            o.tris.Add( vcount + 2 );
+
+                            AppendContour( v2, v0, o );
                         }
                         break;
 
                         case 9:
                         {
-                            float xstep  = topLeft.GetExtentRightNormalized() * m_voxelSize;
-                            float xstep2 = bottomLeft.GetExtentRightNormalized() * m_voxelSize;
+                            float xstep  = topLeft.GetExtentRightNormalized() * voxelSize;
+                            float xstep2 = bottomLeft.GetExtentRightNormalized() * voxelSize;
 
                             Vector3 v0 = new Vector3( x0, y0 );
                             Vector3 v1 = new Vector3( x0, y1 );
                             Vector3 v2 = new Vector3( x0 + xstep, y1 );
                             Vector3 v3 = new Vector3( x0 + xstep2, y0 );
 
-                            int vcount = verts.Count;
+                            int vcount = o.verts.Count;
             
-                            verts.Add( v0 );
-                            verts.Add( v1 );
-                            verts.Add( v2 );
-                            verts.Add( v3 );
+                            o.verts.Add( v0 );
+                            o.verts.Add( v1 );
+                            o.verts.Add( v2 );
+                            o.verts.Add( v3 );
 
-                            tris.Add( vcount );
-                            tris.Add( vcount + 1 );
-                            tris.Add( vcount + 2 );
+                            o.tris.Add( vcount );
+                            o.tris.Add( vcount + 1 );
+                            o.tris.Add( vcount + 2 );
 
-                            tris.Add( vcount );
-                            tris.Add( vcount + 2 );
-                            tris.Add( vcount + 3 );
+                            o.tris.Add( vcount );
+                            o.tris.Add( vcount + 2 );
+                            o.tris.Add( vcount + 3 );
+
+                            AppendContour( v2, v3, o );
                         }
                         break;
 
                         case 10:
                         {
-                            float xstep  = topLeft.GetExtentRightNormalized() * m_voxelSize;
-                            float ystep  = topLeft.GetExtentBottomNormalized() * m_voxelSize;
-                            float xstep2 = bottomRight.GetExtentLeftNormalized() * m_voxelSize;
-                            float ystep2 = bottomRight.GetExtentTopNormalized() * m_voxelSize;
+                            float xstep  = topLeft.GetExtentRightNormalized() * voxelSize;
+                            float ystep  = topLeft.GetExtentBottomNormalized() * voxelSize;
+                            float xstep2 = bottomRight.GetExtentLeftNormalized() * voxelSize;
+                            float ystep2 = bottomRight.GetExtentTopNormalized() * voxelSize;
 
                             Vector3 v0 = new Vector3( x0, y1 - ystep );
                             Vector3 v1 = new Vector3( x0, y1 );
@@ -331,37 +384,40 @@ namespace VoxelTerrain2D
                             Vector3 v4 = new Vector3( x1, y0 + ystep2 );
                             Vector3 v5 = new Vector3( x1, y0 );
 
-                            int vcount = verts.Count;
+                            int vcount = o.verts.Count;
             
-                            verts.Add( v0 );
-                            verts.Add( v1 );
-                            verts.Add( v2 );
-                            verts.Add( v3 );
-                            verts.Add( v4 );
-                            verts.Add( v5 );
+                            o.verts.Add( v0 );
+                            o.verts.Add( v1 );
+                            o.verts.Add( v2 );
+                            o.verts.Add( v3 );
+                            o.verts.Add( v4 );
+                            o.verts.Add( v5 );
 
-                            tris.Add( vcount );
-                            tris.Add( vcount + 1 );
-                            tris.Add( vcount + 2 );
+                            o.tris.Add( vcount );
+                            o.tris.Add( vcount + 1 );
+                            o.tris.Add( vcount + 2 );
 
-                            tris.Add( vcount + 3 );
-                            tris.Add( vcount + 4 );
-                            tris.Add( vcount + 5 );
+                            o.tris.Add( vcount + 3 );
+                            o.tris.Add( vcount + 4 );
+                            o.tris.Add( vcount + 5 );
 
-                            tris.Add( vcount + 3 );
-                            tris.Add( vcount + 0 );
-                            tris.Add( vcount + 2 );
+                            o.tris.Add( vcount + 3 );
+                            o.tris.Add( vcount + 0 );
+                            o.tris.Add( vcount + 2 );
 
-                            tris.Add( vcount + 3 );
-                            tris.Add( vcount + 2 );
-                            tris.Add( vcount + 4 );
+                            o.tris.Add( vcount + 3 );
+                            o.tris.Add( vcount + 2 );
+                            o.tris.Add( vcount + 4 );
+
+                            AppendContour( v3, v0, o );
+                            AppendContour( v2, v4, o );
                         }
                         break;
 
                         case 11:
                         {
-                            float xstep  = topLeft.GetExtentRightNormalized() * m_voxelSize;
-                            float ystep  = bottomRight.GetExtentTopNormalized() * m_voxelSize;
+                            float xstep  = topLeft.GetExtentRightNormalized() * voxelSize;
+                            float ystep  = bottomRight.GetExtentTopNormalized() * voxelSize;
 
                             Vector3 v0 = new Vector3( x0, y0 );
                             Vector3 v1 = new Vector3( x0, y1 );
@@ -369,59 +425,63 @@ namespace VoxelTerrain2D
                             Vector3 v3 = new Vector3( x1, y0 + ystep );
                             Vector3 v4 = new Vector3( x1, y0 );
 
-                            int vcount = verts.Count;
+                            int vcount = o.verts.Count;
             
-                            verts.Add( v0 );
-                            verts.Add( v1 );
-                            verts.Add( v2 );
-                            verts.Add( v3 );
-                            verts.Add( v4 );
+                            o.verts.Add( v0 );
+                            o.verts.Add( v1 );
+                            o.verts.Add( v2 );
+                            o.verts.Add( v3 );
+                            o.verts.Add( v4 );
 
-                            tris.Add( vcount );
-                            tris.Add( vcount + 1 );
-                            tris.Add( vcount + 2 );
+                            o.tris.Add( vcount );
+                            o.tris.Add( vcount + 1 );
+                            o.tris.Add( vcount + 2 );
 
-                            tris.Add( vcount );
-                            tris.Add( vcount + 2 );
-                            tris.Add( vcount + 3 );
+                            o.tris.Add( vcount );
+                            o.tris.Add( vcount + 2 );
+                            o.tris.Add( vcount + 3 );
 
-                            tris.Add( vcount );
-                            tris.Add( vcount + 3 );
-                            tris.Add( vcount + 4 );
+                            o.tris.Add( vcount );
+                            o.tris.Add( vcount + 3 );
+                            o.tris.Add( vcount + 4 );
+
+                            AppendContour( v2, v3, o );
                         }
                         break;
 
                         case 12:
                         {
-                            float ystep  = topLeft.GetExtentBottomNormalized() * m_voxelSize;
-                            float ystep2 = topRight.GetExtentBottomNormalized() * m_voxelSize;
+                            float ystep  = topLeft.GetExtentBottomNormalized() * voxelSize;
+                            float ystep2 = topRight.GetExtentBottomNormalized() * voxelSize;
 
                             Vector3 v0 = new Vector3( x0, y1 - ystep );
                             Vector3 v1 = new Vector3( x0, y1 );
                             Vector3 v2 = new Vector3( x1, y1);
                             Vector3 v3 = new Vector3( x1, y1 - ystep2 );
 
-                            int vcount = verts.Count;
+                            int vcount = o.verts.Count;
             
-                            verts.Add( v0 );
-                            verts.Add( v1 );
-                            verts.Add( v2 );
-                            verts.Add( v3 );
+                            o.verts.Add( v0 );
+                            o.verts.Add( v1 );
+                            o.verts.Add( v2 );
+                            o.verts.Add( v3 );
 
-                            tris.Add( vcount );
-                            tris.Add( vcount + 1 );
-                            tris.Add( vcount + 2 );
+                            o.tris.Add( vcount );
+                            o.tris.Add( vcount + 1 );
+                            o.tris.Add( vcount + 2 );
 
-                            tris.Add( vcount );
-                            tris.Add( vcount + 2 );
-                            tris.Add( vcount + 3 );
+                            o.tris.Add( vcount );
+                            o.tris.Add( vcount + 2 );
+                            o.tris.Add( vcount + 3 );
+
+                            AppendContour( v3, v0, o );
                         }
                         break;
 
                         case 13:
                         {
-                            float xstep  = bottomLeft.GetExtentRightNormalized() * m_voxelSize;
-                            float ystep  = topRight.GetExtentBottomNormalized() * m_voxelSize;
+                            float xstep  = bottomLeft.GetExtentRightNormalized() * voxelSize;
+                            float ystep  = topRight.GetExtentBottomNormalized() * voxelSize;
 
                             Vector3 v0 = new Vector3( x0, y0 );
                             Vector3 v1 = new Vector3( x0, y1 );
@@ -429,32 +489,34 @@ namespace VoxelTerrain2D
                             Vector3 v3 = new Vector3( x1, y1 - ystep );
                             Vector3 v4 = new Vector3( x0 + xstep, y0 );
 
-                            int vcount = verts.Count;
+                            int vcount = o.verts.Count;
             
-                            verts.Add( v0 );
-                            verts.Add( v1 );
-                            verts.Add( v2 );
-                            verts.Add( v3 );
-                            verts.Add( v4 );
+                            o.verts.Add( v0 );
+                            o.verts.Add( v1 );
+                            o.verts.Add( v2 );
+                            o.verts.Add( v3 );
+                            o.verts.Add( v4 );
 
-                            tris.Add( vcount );
-                            tris.Add( vcount + 1 );
-                            tris.Add( vcount + 4 );
+                            o.tris.Add( vcount );
+                            o.tris.Add( vcount + 1 );
+                            o.tris.Add( vcount + 4 );
 
-                            tris.Add( vcount + 4 );
-                            tris.Add( vcount + 1 );
-                            tris.Add( vcount + 3 );
+                            o.tris.Add( vcount + 4 );
+                            o.tris.Add( vcount + 1 );
+                            o.tris.Add( vcount + 3 );
 
-                            tris.Add( vcount + 3 );
-                            tris.Add( vcount + 1 );
-                            tris.Add( vcount + 2 );
+                            o.tris.Add( vcount + 3 );
+                            o.tris.Add( vcount + 1 );
+                            o.tris.Add( vcount + 2 );
+
+                            AppendContour( v3, v4, o );
                         }
                         break;
 
                         case 14:
                         {
-                            float xstep  = bottomRight.GetExtentLeftNormalized() * m_voxelSize;
-                            float ystep  = topLeft.GetExtentBottomNormalized() * m_voxelSize;
+                            float xstep  = bottomRight.GetExtentLeftNormalized() * voxelSize;
+                            float ystep  = topLeft.GetExtentBottomNormalized() * voxelSize;
 
                             Vector3 v0 = new Vector3( x0, y1 - ystep );
                             Vector3 v1 = new Vector3( x0, y1 );
@@ -462,25 +524,27 @@ namespace VoxelTerrain2D
                             Vector3 v3 = new Vector3( x1, y0 );
                             Vector3 v4 = new Vector3( x1 - xstep, y0 );
 
-                            int vcount = verts.Count;
+                            int vcount = o.verts.Count;
             
-                            verts.Add( v0 );
-                            verts.Add( v1 );
-                            verts.Add( v2 );
-                            verts.Add( v3 );
-                            verts.Add( v4 );
+                            o.verts.Add( v0 );
+                            o.verts.Add( v1 );
+                            o.verts.Add( v2 );
+                            o.verts.Add( v3 );
+                            o.verts.Add( v4 );
 
-                            tris.Add( vcount );
-                            tris.Add( vcount + 1 );
-                            tris.Add( vcount + 2 );
+                            o.tris.Add( vcount );
+                            o.tris.Add( vcount + 1 );
+                            o.tris.Add( vcount + 2 );
 
-                            tris.Add( vcount );
-                            tris.Add( vcount + 2 );
-                            tris.Add( vcount + 3 );
+                            o.tris.Add( vcount );
+                            o.tris.Add( vcount + 2 );
+                            o.tris.Add( vcount + 3 );
 
-                            tris.Add( vcount );
-                            tris.Add( vcount + 3 );
-                            tris.Add( vcount + 4 );
+                            o.tris.Add( vcount );
+                            o.tris.Add( vcount + 3 );
+                            o.tris.Add( vcount + 4 );
+
+                            AppendContour( v4, v0, o );
                         }
                         break;
 
@@ -488,7 +552,7 @@ namespace VoxelTerrain2D
                         {
                             if ( topLeft.CompareWithoutExtent( bottomLeft ) && topRight.CompareWithoutExtent( bottomRight ) && bottomLeft.CompareWithoutExtent( bottomRight ) )
                             {
-                                GenerateGreedyQuad( dataset, dataWidth, dataHeight, x, y, verts, tris, batched );
+                                GenerateGreedyQuad( i, x, y, o );
                             }
                             else
                             {
@@ -497,30 +561,40 @@ namespace VoxelTerrain2D
                                 Vector3 v2 = new Vector3( x1, y1 );
                                 Vector3 v3 = new Vector3( x1, y0 );
 
-                                int vcount = verts.Count;
+                                int vcount = o.verts.Count;
 
-                                verts.Add( v0 );
-                                verts.Add( v1 );
-                                verts.Add( v2 );
-                                verts.Add( v3 );
+                                o.verts.Add( v0 );
+                                o.verts.Add( v1 );
+                                o.verts.Add( v2 );
+                                o.verts.Add( v3 );
 
-                                tris.Add( vcount );
-                                tris.Add( vcount + 1 );
-                                tris.Add( vcount + 2 );
+                                o.tris.Add( vcount );
+                                o.tris.Add( vcount + 1 );
+                                o.tris.Add( vcount + 2 );
 
-                                tris.Add( vcount );
-                                tris.Add( vcount + 2 );
-                                tris.Add( vcount + 3 );
+                                o.tris.Add( vcount );
+                                o.tris.Add( vcount + 2 );
+                                o.tris.Add( vcount + 3 );
                             }
                         }
                         break;
                     }
                 }
             }
+
+            CombineContours( o );
+
+            if ( m_settings.generateCollision ){ BuildCollision( o ); }
         }
 
-        private void GenerateGreedyQuad( VoxelData[] dataset, int dataWidth, int dataHeight, int x, int y, List< Vector3 > verts, List< int > tris, bool[] batched )
+
+        private void GenerateGreedyQuad( DataChunk i, int x, int y, MeshOutput o )
         {
+            VoxelData[] dataset = i.data;
+            int   dataWidth     = i.width;
+            int   dataHeight    = i.height;
+            float voxelSize     = m_settings.voxelSize;
+
             int startX = x;
             int startY = y;
             int endX   = x;
@@ -530,7 +604,7 @@ namespace VoxelTerrain2D
 
             for( int xx = x + 1; xx < dataWidth - 1; xx++ )
             {
-                if ( batched[ y * dataWidth + xx ] == true ) { break; } // Encountered another batch, stop expanding
+                if ( o.batched[ y * dataWidth + xx ] == true ) { break; } // Encountered another batch, stop expanding
 
                 VoxelData a = dataset[ y * dataWidth + xx + 1];
                 VoxelData b = dataset[ ( y + 1 ) * dataWidth + xx + 1 ];
@@ -547,7 +621,7 @@ namespace VoxelTerrain2D
             {
                 for( int xx = startX; xx <= endX && validUp == true; xx++ )
                 {
-                    if ( batched[ yy * dataWidth + xx ] == true ) { validUp = false; break; } // Encountered another batch, stop expanding
+                    if ( o.batched[ yy * dataWidth + xx ] == true ) { validUp = false; break; } // Encountered another batch, stop expanding
 
                     VoxelData a = dataset[ ( yy + 1 ) * dataWidth + xx + 1 ];
                     VoxelData b = dataset[ ( yy + 1 ) * dataWidth + xx ];
@@ -570,35 +644,139 @@ namespace VoxelTerrain2D
             {
                 for ( int xx = startX; xx <= endX; xx++ )
                 {
-                    batched[ yy * dataWidth + xx ] = true;
+                    o.batched[ yy * dataWidth + xx ] = true;
                 }
             }
 
             // Build quad mesh data
-            float x0 = startX * m_voxelSize;
-            float x1 = ( endX + 1 ) * m_voxelSize;
-            float y0 = startY * m_voxelSize;
-            float y1 = ( endY + 1 ) * m_voxelSize;
+            float x0 = startX * voxelSize;
+            float x1 = ( endX + 1 ) * voxelSize;
+            float y0 = startY * voxelSize;
+            float y1 = ( endY + 1 ) * voxelSize;
 
             Vector3 v0 = new Vector3( x0, y0 );
             Vector3 v1 = new Vector3( x0, y1 );
             Vector3 v2 = new Vector3( x1, y1 );
             Vector3 v3 = new Vector3( x1, y0 );
 
-            int vcount = verts.Count;
+            int vcount = o.verts.Count;
             
-            verts.Add( v0 );
-            verts.Add( v1 );
-            verts.Add( v2 );
-            verts.Add( v3 );
+            o.verts.Add( v0 );
+            o.verts.Add( v1 );
+            o.verts.Add( v2 );
+            o.verts.Add( v3 );
 
-            tris.Add( vcount );
-            tris.Add( vcount + 1 );
-            tris.Add( vcount + 2 );
+            o.tris.Add( vcount );
+            o.tris.Add( vcount + 1 );
+            o.tris.Add( vcount + 2 );
 
-            tris.Add( vcount );
-            tris.Add( vcount + 2 );
-            tris.Add( vcount + 3 );
+            o.tris.Add( vcount );
+            o.tris.Add( vcount + 2 );
+            o.tris.Add( vcount + 3 );
+        }
+
+
+        private bool AppendContour( Vector2 from, Vector2 to, MeshOutput o )
+        {
+            for ( int i = 0; i < o.contours.Count; i++ )
+            {
+                if ( o.contours[ i ].Count > 1 )
+                {
+                    Vector2 first = o.contours[ i ][ 0 ];
+                    Vector2 last  = o.contours[ i ][ o.contours[ i ].Count - 1 ];
+
+                    if ( Mathf.Approximately( last.x, from.x ) && Mathf.Approximately( last.y, from.y ) )
+                    {
+                        o.contours[ i ].Add( to );
+                        return true;
+                    }
+                    else if ( Mathf.Approximately( first.x, to.x ) && Mathf.Approximately( first.y, to.y ) )
+                    {
+                        o.contours[ i ].Insert( 0, from );
+                        return true;
+                    }
+                }
+            }
+
+            List< Vector2 > ctr = new List<Vector2>();
+            ctr.Add( from );
+            ctr.Add( to );
+
+            o.contours.Add( ctr );
+
+            return false;
+        }
+
+
+        private void CombineContours( MeshOutput o )
+        {
+            for( int i = o.contours.Count - 1; i > 0; i-- )
+            {
+                for( int k = i - 1; k >= 0; k-- )
+                {
+                    bool merged = false;
+
+                    Vector2 ifirst = o.contours[ i ][ 0 ];
+                    Vector2 ilast = o.contours[ i ][ o.contours[ i ].Count - 1 ];
+
+                    Vector2 kfirst = o.contours[ k ][ 0 ];
+                    Vector2 klast = o.contours[ k ][ o.contours[ k ].Count - 1 ];
+
+                    if ( Mathf.Approximately( klast.x, ifirst.x ) && Mathf.Approximately( klast.y, ifirst.y ) )
+                    {
+                        o.contours[ k ].AddRange( o.contours[ i ] );
+                        merged = true;
+                    }
+                    else if ( Mathf.Approximately( kfirst.x, ilast.x ) && Mathf.Approximately( kfirst.y, ilast.y ) )
+                    {
+                        o.contours[ i ].AddRange( o.contours[ k ] );
+                        o.contours[ k ] = o.contours[ i ];
+                        merged = true;
+                    }
+
+                    if ( merged == true ) { o.contours.RemoveAt( i ); break; }
+                }
+            }
+        }
+
+
+        private void BuildCollision( MeshOutput o )
+        {
+            float extent = m_settings.collisionExtrudeExtent;
+            int   verts  = 0;
+
+            for( int i = 0; i < o.contours.Count; i++ )
+            {
+                List< Vector2 > ctr = o.contours[ i ];
+                
+                Vector2 prev = ctr[ 0 ];
+                for( int p = 1; p < ctr.Count; p++ )
+                {
+                    Vector2 next = ctr[ p ];
+
+                    Vector3 afar  = new Vector3( prev.x, prev.y, extent );
+                    Vector3 anear = new Vector3( prev.x, prev.y, -extent );
+
+                    Vector3 bfar  = new Vector3( next.x, next.y, extent );
+                    Vector3 bnear = new Vector3( next.x, next.y, -extent );
+
+                    o.collisionVerts.Add( anear );
+                    o.collisionVerts.Add( afar );
+                    o.collisionVerts.Add( bnear );
+                    o.collisionVerts.Add( bfar );
+
+                    o.collisionTris.Add( verts );
+                    o.collisionTris.Add( verts + 1 );
+                    o.collisionTris.Add( verts + 2 );
+
+                    o.collisionTris.Add( verts + 2 );
+                    o.collisionTris.Add( verts + 1 );
+                    o.collisionTris.Add( verts + 3 );
+
+                    verts += 4;
+                    prev = next;
+                }
+            }
         }
     }
 }

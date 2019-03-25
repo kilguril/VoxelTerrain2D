@@ -441,11 +441,15 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   m_initOnAwake: 1
   m_threadedMeshing: 1
-  m_width: 1000
-  m_height: 1000
-  m_voxelSize: 0.1
-  m_chunkSize: 100
+  m_hideChunks: 1
+  m_width: 100
+  m_height: 100
+  m_voxelSize: 1
+  m_chunkSize: 20
   m_fillMaterial: {fileID: 2100000, guid: 8d836ae80f80d384897d74207d3b365d, type: 2}
+  m_generateCollider: 1
+  m_extrudeExtent: 1
+  m_colliderCookingOptions: 0
 --- !u!4 &1252366207
 Transform:
   m_ObjectHideFlags: 0
@@ -474,4 +478,5 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   m_gizmoSize: 0.25
   m_wireframe: 1
+  m_renderExtents: 0
   m_renderWhenDeselected: 0

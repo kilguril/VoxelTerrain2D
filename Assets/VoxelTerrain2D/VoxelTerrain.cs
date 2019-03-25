@@ -18,6 +18,9 @@ namespace VoxelTerrain2D
         [SerializeField]
         private bool m_threadedMeshing = default( bool );
 
+        [SerializeField]
+        private bool m_hideChunks = default( bool );
+
         [Header("Voxel Settings")]
         [SerializeField]
         private int m_width        = default( int );
@@ -29,13 +32,22 @@ namespace VoxelTerrain2D
         private float m_voxelSize  = default( int );
 
         [SerializeField]
-        [Range(2,100)]
+        [Range(3,100)]
         private int m_chunkSize    = default( int );
 
         [Header("Render Settings")]
         [SerializeField]
         private Material m_fillMaterial = default( Material );
 
+        [Header("Physics Settings")]
+        [SerializeField]
+        private bool m_generateCollider = default( bool );
+
+        [SerializeField]
+        private float m_extrudeExtent = default( float );
+
+        [SerializeField]
+        private MeshColliderCookingOptions m_colliderCookingOptions = default( MeshColliderCookingOptions );
 
         private ChunkedDataset< VoxelData > m_dataSource;
         private VoxelChunk[]                m_chunks;
@@ -49,6 +61,13 @@ namespace VoxelTerrain2D
 
         public void Initialize()
         {
+            GeneratorSettings settings;
+            settings.voxelSize              = m_voxelSize;
+            settings.fillMaterial           = m_fillMaterial;
+            settings.generateCollision      = m_generateCollider;
+            settings.collisionExtrudeExtent = m_extrudeExtent;
+            settings.colliderCookingOptions = m_colliderCookingOptions;
+
             m_dataSource = new ChunkedDataset< VoxelData >( m_width, m_height, m_chunkSize );
             m_chunks     = new VoxelChunk[ m_dataSource.chunkCountX * m_dataSource.chunkCountY ];
 
@@ -61,7 +80,7 @@ namespace VoxelTerrain2D
                     if ( chunk.width > 1 && chunk.height > 1 )
                     {
                         GameObject go = new GameObject(string.Format("Chunk[{0},{1}]", x, y ) );
-                        go.hideFlags = HideFlags.HideAndDontSave;
+                        if ( m_hideChunks ) { go.hideFlags = HideFlags.HideAndDontSave; }
 
                         go.transform.parent = transform;
                         go.transform.localRotation = Quaternion.identity;
@@ -74,7 +93,6 @@ namespace VoxelTerrain2D
                         );
 
                         VoxelChunk vchunk = null;
-
                         if ( m_threadedMeshing == true )
                         {
                             vchunk = go.AddComponent<ThreadedVoxelChunk>();
@@ -85,7 +103,7 @@ namespace VoxelTerrain2D
                         }
 
                         m_chunks[ y * m_dataSource.chunkCountX + x ] = vchunk;
-                        vchunk.Initialize( chunk, voxelSize, m_fillMaterial );
+                        vchunk.Initialize( chunk, settings );
                     }
                 }
             }
