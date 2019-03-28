@@ -7,8 +7,6 @@ namespace VoxelTerrain2D
 {
     public sealed class SimpleVoxelChunk : VoxelChunk
     {
-        private MeshOutput      m_meshOut;
-
         protected override void OnInitialized()
         {
             // Initialize chunk data
@@ -20,6 +18,13 @@ namespace VoxelTerrain2D
             m_meshOut.batched  = new bool[ m_data.width * m_data.height ];
             m_meshOut.contours = new List<List<Vector2>>();
 
+            // Contour buffers
+            if ( m_settings.meshContour )
+            {
+                m_meshOut.contourVerts = new List<Vector3>();
+                m_meshOut.contourTris  = new List<int>();
+            }
+
             // Collision buffers
             if ( m_settings.generateCollision )
             {
@@ -29,6 +34,13 @@ namespace VoxelTerrain2D
 
             // Rebuild initial state
             RebuildMesh();
+        }
+
+
+        [ContextMenu("Force Remesh")]
+        void DebugForceRemesh()
+        {
+            m_data.dirty = true;
         }
 
 
@@ -58,6 +70,12 @@ namespace VoxelTerrain2D
 
             for ( int i = 0; i < m_meshOut.batched.Length; i++ ) { m_meshOut.batched[ i ] = false; }
 
+            if ( m_settings.meshContour )
+            {
+                m_meshOut.contourVerts.Clear();
+                m_meshOut.contourTris.Clear();
+            }
+
             if ( m_settings.generateCollision )
             {
                 m_meshOut.collisionVerts.Clear();
@@ -71,6 +89,13 @@ namespace VoxelTerrain2D
             m_mesh.Clear( true );
             m_mesh.SetVertices( m_meshOut.verts );
             m_mesh.SetTriangles( m_meshOut.tris, 0, false );
+
+            if ( m_settings.meshContour )
+            {
+                m_meshContour.Clear( true );
+                m_meshContour.SetVertices( m_meshOut.contourVerts );
+                m_meshContour.SetTriangles( m_meshOut.contourTris, 0, false );
+            }
 
             if ( m_settings.generateCollision )
             {

@@ -8,9 +8,7 @@ namespace VoxelTerrain2D
 {
     public sealed class ThreadedVoxelChunk : VoxelChunk
     {
-        private MeshOutput      m_meshOut;
         private Task            m_remeshTask;
-
 
         protected override void OnInitialized()
         {
@@ -101,32 +99,6 @@ namespace VoxelTerrain2D
 
                 m_collider.sharedMesh = null;
                 m_collider.sharedMesh = m_meshCollision;
-            }
-        }
-
-
-        // Temp:
-        // Contour debug view
-        static List< Color > tempColors;
-
-        void OnDrawGizmosSelected()
-        {
-            if ( tempColors == null ){ tempColors = new List<Color>(); }
-
-            for( int i = 0; i < m_meshOut.contours.Count; i++ )
-            {
-                if ( i >= tempColors.Count ){ tempColors.Add( UnityEngine.Random.ColorHSV( 0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f ) ); }
-
-                Gizmos.color = tempColors[ i ];
-                List< Vector2 > ctr = m_meshOut.contours[ i ];
-
-                for( int p = 0; p < ctr.Count - 1; p++ )
-                {
-                    Vector3 pt1 = transform.TransformPoint( ctr[ p ] );
-                    Vector2 pt2 = transform.TransformPoint( ctr[ p + 1 ] );
-
-                    Gizmos.DrawLine( pt1, pt2 );
-                }
             }
         }
     }

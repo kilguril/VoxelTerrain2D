@@ -8,11 +8,22 @@ namespace VoxelTerrain2D
 {
     public abstract class VoxelChunk : MonoBehaviour
     {
+        #if UNITY_EDITOR
+        [SerializeField]
+        private bool m_debugContour = default( bool );
+
+        [SerializeField]
+        private bool m_debugContourNormals = default( bool );
+        #endif
+
         protected class MeshOutput
         {
             public List< Vector3 >          verts;
             public List< int >              tris;
             public bool[]                   batched;
+
+            public List< Vector3 >          contourVerts;
+            public List< int >              contourTris;
 
             public List< List < Vector2 > > contours;
 
@@ -24,11 +35,15 @@ namespace VoxelTerrain2D
         protected GeneratorSettings m_settings;
 
         protected Mesh         m_mesh;
-        protected MeshFilter   m_filter;
         protected MeshRenderer m_renderer;
+
+        protected Mesh         m_meshContour;
+        protected MeshRenderer m_rendererContour;
 
         protected Mesh         m_meshCollision;
         protected MeshCollider m_collider;
+
+        protected MeshOutput   m_meshOut;
 
         protected bool         m_init = false;
 
@@ -51,10 +66,10 @@ namespace VoxelTerrain2D
                 new Vector3( meshSizeX, meshSizeY )
             );
 
-            m_filter   = gameObject.AddComponent< MeshFilter >();
-            m_renderer = gameObject.AddComponent< MeshRenderer >();
+            MeshFilter filter = gameObject.AddComponent< MeshFilter >();
+            m_renderer        = gameObject.AddComponent< MeshRenderer >();
 
-            m_filter.sharedMesh       = m_mesh;
+            filter.sharedMesh = m_mesh;
             m_renderer.sharedMaterial = m_settings.fillMaterial;
 
             if ( m_settings.generateCollision )
@@ -69,6 +84,27 @@ namespace VoxelTerrain2D
                 m_collider.sharedMesh = m_meshCollision;
                 m_collider.convex = false;
                 m_collider.cookingOptions = m_settings.colliderCookingOptions;
+            }
+
+            if ( m_settings.meshContour )
+            {
+                GameObject contour = new GameObject("Contour");
+                contour.transform.parent = transform;
+                contour.transform.localPosition = Vector3.zero;
+                contour.transform.localScale    = Vector3.one;
+                contour.transform.localRotation = Quaternion.identity;
+
+                m_meshContour = new Mesh();
+                m_meshContour.name = name + "_MeshContour";
+                m_meshContour.MarkDynamic();
+
+                m_meshContour.bounds = m_mesh.bounds;
+
+                MeshFilter contourFilter = contour.AddComponent< MeshFilter >();
+                contourFilter.sharedMesh = m_meshContour;
+
+                m_rendererContour = contour.AddComponent< MeshRenderer >();
+                // TODO :: m_rendererContour.sharedMaterial = 
             }
 
             OnInitialized();
@@ -585,6 +621,7 @@ namespace VoxelTerrain2D
             CombineContours( o );
 
             if ( m_settings.generateCollision ){ BuildCollision( o ); }
+            if ( m_settings.meshContour ){ BuildContourMesh( o ); }
         }
 
 
@@ -682,17 +719,43 @@ namespace VoxelTerrain2D
             {
                 if ( o.contours[ i ].Count > 1 )
                 {
-                    Vector2 first = o.contours[ i ][ 0 ];
-                    Vector2 last  = o.contours[ i ][ o.contours[ i ].Count - 1 ];
+                    Vector2 first  = o.contours[ i ][ 0 ];
+                    Vector2 second = o.contours[ i ][ 1 ];
+
+                    Vector2 last       = o.contours[ i ][ o.contours[ i ].Count - 1 ];
+                    Vector2 beforeLast = o.contours[ i ][ o.contours[ i ].Count - 2 ];
 
                     if ( Mathf.Approximately( last.x, from.x ) && Mathf.Approximately( last.y, from.y ) )
                     {
-                        o.contours[ i ].Add( to );
+                        Vector2 ab = to - from;
+                        Vector2 cd = last - beforeLast;
+                        float   a  = Vector2.Angle( ab, cd );
+
+                        if ( Mathf.Approximately( a, 0.0f ) )
+                        {
+                            o.contours[ i ][ o.contours[ i ].Count - 1 ] = to;
+                        }
+                        else
+                        {
+                            o.contours[ i ].Add( to );
+                        }
+
                         return true;
                     }
                     else if ( Mathf.Approximately( first.x, to.x ) && Mathf.Approximately( first.y, to.y ) )
                     {
-                        o.contours[ i ].Insert( 0, from );
+                        Vector2 ab = to - from;
+                        Vector2 cd = second - first;
+                        float   a  = Vector2.Angle( ab, cd );
+
+                        if ( Mathf.Approximately( a, 0.0f ) )
+                        {
+                            o.contours[ i ][ 0 ] = from;
+                        }
+                        else
+                        {
+                            o.contours[ i ].Insert( 0, from );
+                        }
                         return true;
                     }
                 }
@@ -724,17 +787,104 @@ namespace VoxelTerrain2D
 
                     if ( Mathf.Approximately( klast.x, ifirst.x ) && Mathf.Approximately( klast.y, ifirst.y ) )
                     {
+                        o.contours[ k ].RemoveAt( o.contours[ k ].Count - 1 );
                         o.contours[ k ].AddRange( o.contours[ i ] );
                         merged = true;
                     }
                     else if ( Mathf.Approximately( kfirst.x, ilast.x ) && Mathf.Approximately( kfirst.y, ilast.y ) )
                     {
+                        o.contours[ i ].RemoveAt( o.contours[ i ].Count - 1 );
                         o.contours[ i ].AddRange( o.contours[ k ] );
                         o.contours[ k ] = o.contours[ i ];
                         merged = true;
                     }
 
                     if ( merged == true ) { o.contours.RemoveAt( i ); break; }
+                }
+            }
+        }
+
+
+        private void BuildContourMesh( MeshOutput o )
+        {
+            float inset  = m_settings.contourInset;
+            float outset = m_settings.contourOutset;
+            float zbias  = m_settings.contourZbias;
+            int   verts  = 0;
+
+            for( int i = 0; i < o.contours.Count; i++ )
+            {
+                List< Vector2 > contour = o.contours[ i ];
+                if ( contour.Count < 2 ) { continue; }
+
+                Vector2 a = contour[ 0 ];
+                Vector2 b = contour[ 1 ];
+
+                Vector2 ab = b - a;
+                Vector2 n  = new Vector2( -ab.y, ab.x ).normalized;
+
+                Vector3 p1 = a - n * inset;
+                Vector3 p2 = a + n * outset;
+                Vector3 p3 = b - n * inset;
+                Vector3 p4 = b + n * outset;
+
+                p1.z = zbias;
+                p2.z = zbias;
+                p3.z = zbias;
+                p4.z = zbias;
+
+                o.contourVerts.Add( p1 );
+                o.contourVerts.Add( p2 );
+                o.contourVerts.Add( p3 );
+                o.contourVerts.Add( p4 );
+
+                o.contourTris.Add( verts     );
+                o.contourTris.Add( verts + 1 );
+                o.contourTris.Add( verts + 2 );
+
+                o.contourTris.Add( verts + 2 );
+                o.contourTris.Add( verts + 1 );
+                o.contourTris.Add( verts + 3 );
+
+                verts += 4;
+
+                // Repeat segments
+                for( int p = 1; p < contour.Count - 1; p++ )
+                {
+                    a = contour[ p ];
+                    b = contour[ p + 1 ];
+
+                    ab = b - a;
+                    n  = new Vector2( -ab.y, ab.x ).normalized;
+
+                    p1 = a - n * inset;
+                    p2 = a + n * outset;
+
+                    // Instead of fancy mitering, we'll average the shared vertices to smooth out corners a bit
+                    Vector3 avg1 = ( p1 + o.contourVerts[ verts - 2 ] ) / 2.0f;
+                    Vector3 avg2 = ( p2 + o.contourVerts[ verts - 1 ] ) / 2.0f;
+                    o.contourVerts[ verts - 2 ] = avg1;
+                    o.contourVerts[ verts - 1 ] = avg2;
+
+                    p3 = b - n * inset;
+                    p4 = b + n * outset;
+
+                    p1.z = zbias;
+                    p2.z = zbias;
+                    p3.z = zbias;
+                    p4.z = zbias;
+
+                    o.contourVerts.Add( p3 );
+                    o.contourVerts.Add( p4 );
+                    verts += 2;
+
+                    o.contourTris.Add( verts - 4 );
+                    o.contourTris.Add( verts - 3 );
+                    o.contourTris.Add( verts - 2 );
+
+                    o.contourTris.Add( verts - 3 );
+                    o.contourTris.Add( verts - 1 );
+                    o.contourTris.Add( verts - 2 );
                 }
             }
         }
@@ -778,5 +928,43 @@ namespace VoxelTerrain2D
                 }
             }
         }
+
+        #if UNITY_EDITOR
+        // Contour debug view
+        static List< Color > debugContourColor;
+
+        void OnDrawGizmosSelected()
+        {
+            if ( m_debugContour )
+            {
+                if ( debugContourColor == null ) { debugContourColor = new List<Color>(); }
+
+                for ( int i = 0; i < m_meshOut.contours.Count; i++ )
+                {
+                    if ( i >= debugContourColor.Count ) { debugContourColor.Add( UnityEngine.Random.ColorHSV( 0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f ) ); }
+
+                    Gizmos.color = debugContourColor[ i ];
+                    List< Vector2 > ctr = m_meshOut.contours[ i ];
+
+                    for ( int p = 0; p < ctr.Count - 1; p++ )
+                    {
+                        Vector2 a = transform.TransformPoint( ctr[ p ] );
+                        Vector2 b = transform.TransformPoint( ctr[ p + 1 ] );
+
+                        Gizmos.DrawLine( a, b );
+
+                        if ( m_debugContourNormals )
+                        {
+                            Vector2 ab = b - a;
+                            Vector2 c  = a + ab / 2.0f;
+                            Vector2 n  = new Vector2( -ab.y, ab.x );
+
+                            Gizmos.DrawLine( c, c + n.normalized * m_settings.voxelSize * 0.5f );
+                        }
+                    }
+                }
+            }
+        }
+        #endif
     }
 }

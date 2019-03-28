@@ -35,9 +35,15 @@ namespace VoxelTerrain2D
         [Range(3,100)]
         private int m_chunkSize    = default( int );
 
-        [Header("Render Settings")]
+        [Header("Contour Settings")]
         [SerializeField]
-        private Material m_fillMaterial = default( Material );
+        private bool m_meshContour = default( bool );
+        [SerializeField]
+        private float m_contourInset = default( float );
+        [SerializeField]
+        private float m_contourOutset = default( float );
+        [SerializeField]
+        private float m_contourZbias = default( float );
 
         [Header("Physics Settings")]
         [SerializeField]
@@ -48,6 +54,10 @@ namespace VoxelTerrain2D
 
         [SerializeField]
         private MeshColliderCookingOptions m_colliderCookingOptions = default( MeshColliderCookingOptions );
+
+        [Header("Render Settings")]
+        [SerializeField]
+        private Material m_fillMaterial = default( Material );
 
         private ChunkedDataset< VoxelData > m_dataSource;
         private VoxelChunk[]                m_chunks;
@@ -67,6 +77,10 @@ namespace VoxelTerrain2D
             settings.generateCollision      = m_generateCollider;
             settings.collisionExtrudeExtent = m_extrudeExtent;
             settings.colliderCookingOptions = m_colliderCookingOptions;
+            settings.meshContour            = m_meshContour;
+            settings.contourZbias           = m_contourZbias;
+            settings.contourInset           = m_contourInset;
+            settings.contourOutset          = m_contourOutset;
 
             m_dataSource = new ChunkedDataset< VoxelData >( m_width, m_height, m_chunkSize );
             m_chunks     = new VoxelChunk[ m_dataSource.chunkCountX * m_dataSource.chunkCountY ];

@@ -8,10 +8,15 @@ namespace VoxelTerrain2D
     {
         public float    voxelSize;
 
-        public Material fillMaterial;
+        public bool     meshContour;
+        public float    contourZbias;
+        public float    contourInset;
+        public float    contourOutset;
 
         public bool     generateCollision;
         public float    collisionExtrudeExtent;
         public MeshColliderCookingOptions colliderCookingOptions;
+
+        public Material fillMaterial;
     }
 }
