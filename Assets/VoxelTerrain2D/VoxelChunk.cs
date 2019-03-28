@@ -24,6 +24,7 @@ namespace VoxelTerrain2D
 
             public List< Vector3 >          contourVerts;
             public List< int >              contourTris;
+            public List< Vector2 >          contourUVs;
 
             public List< List < Vector2 > > contours;
 
@@ -104,7 +105,7 @@ namespace VoxelTerrain2D
                 contourFilter.sharedMesh = m_meshContour;
 
                 m_rendererContour = contour.AddComponent< MeshRenderer >();
-                // TODO :: m_rendererContour.sharedMaterial = 
+                m_rendererContour.sharedMaterial = settings.outlineMaterial;
             }
 
             OnInitialized();
@@ -807,15 +808,22 @@ namespace VoxelTerrain2D
 
         private void BuildContourMesh( MeshOutput o )
         {
+            float uvtilesize = m_settings.fillTileSize;
+
             float inset  = m_settings.contourInset;
             float outset = m_settings.contourOutset;
             float zbias  = m_settings.contourZbias;
             int   verts  = 0;
 
+            Vector2 textureCutoff = ( Vector2.left + Vector2.up ).normalized;
+
             for( int i = 0; i < o.contours.Count; i++ )
             {
                 List< Vector2 > contour = o.contours[ i ];
                 if ( contour.Count < 2 ) { continue; }
+
+                float uvorigin = 0.0f; // TODO :: Random.value;  // Start U at random offset
+                int   vstart   = verts;
 
                 Vector2 a = contour[ 0 ];
                 Vector2 b = contour[ 1 ];
@@ -848,6 +856,21 @@ namespace VoxelTerrain2D
 
                 verts += 4;
 
+                float angle = Vector2.SignedAngle( textureCutoff, ab ) + 180.0f;
+                if ( angle >= 360.0f ){ angle -= 360.0f; }
+                int face = Mathf.FloorToInt( angle / 90 );
+
+                float u0 = uvorigin;
+                float u1 = u0 + ( ab.magnitude / uvtilesize );
+                float v0 = face * 0.25f;
+                float v1 = ( face + 1 ) * 0.25f;
+
+                uvorigin = u1;
+                o.contourUVs.Add( new Vector2( u0, v0 ) );
+                o.contourUVs.Add( new Vector2( u0, v1 ) );
+                o.contourUVs.Add( new Vector2( u1, v0 ) );
+                o.contourUVs.Add( new Vector2( u1, v1 ) );
+
                 // Repeat segments
                 for( int p = 1; p < contour.Count - 1; p++ )
                 {
@@ -874,6 +897,30 @@ namespace VoxelTerrain2D
                     p3.z = zbias;
                     p4.z = zbias;
 
+                    angle = Vector2.SignedAngle( textureCutoff, ab ) + 180.0f;
+                    if ( angle >= 360.0f ){ angle -= 360.0f; }
+                    int nextFace = Mathf.FloorToInt( angle / 90 );
+
+                    u0 = uvorigin;
+                    v0 = face * 0.25f;
+                    v1 = ( face + 1 ) * 0.25f;
+
+                    if ( nextFace != face )
+                    {
+                        u0 = 0.0f; // TODO :: Random.value;
+
+                        face = nextFace;
+                        o.contourVerts.Add( avg1 );
+                        o.contourVerts.Add( avg2 );
+                        verts += 2;
+
+                        o.contourUVs.Add( new Vector2( u0, v0 ) );
+                        o.contourUVs.Add( new Vector2( u0, v1 ) );
+                    }
+
+                    u1 = u0 + ( ab.magnitude / uvtilesize );
+                    uvorigin = u1;
+
                     o.contourVerts.Add( p3 );
                     o.contourVerts.Add( p4 );
                     verts += 2;
@@ -885,6 +932,25 @@ namespace VoxelTerrain2D
                     o.contourTris.Add( verts - 3 );
                     o.contourTris.Add( verts - 1 );
                     o.contourTris.Add( verts - 2 );
+
+                    o.contourUVs.Add( new Vector2( u1, v0 ) );
+                    o.contourUVs.Add( new Vector2( u1, v1 ) );
+                }
+
+                Vector2 last  = contour[ contour.Count - 1 ];
+                Vector2 first = contour[ 0 ];
+
+                // If contour line loops average start/end vertices
+                if ( Mathf.Approximately( first.x, last.x ) && Mathf.Approximately( first.y, last.y ) )
+                {
+                    Vector3 avg1 = ( o.contourVerts[ vstart ] + o.contourVerts[ verts - 2 ] ) / 2.0f;
+                    Vector3 avg2 = ( o.contourVerts[ vstart + 1 ] + o.contourVerts[ verts - 1 ] ) / 2.0f;
+
+                    o.contourVerts[ vstart ] = avg1;
+                    o.contourVerts[ verts - 2 ] = avg1;
+
+                    o.contourVerts[ vstart + 1 ] = avg2;
+                    o.contourVerts[ verts - 1 ] = avg2;
                 }
             }
         }

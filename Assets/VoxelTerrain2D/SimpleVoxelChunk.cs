@@ -21,8 +21,9 @@ namespace VoxelTerrain2D
             // Contour buffers
             if ( m_settings.meshContour )
             {
-                m_meshOut.contourVerts = new List<Vector3>();
-                m_meshOut.contourTris  = new List<int>();
+                m_meshOut.contourVerts  = new List<Vector3>();
+                m_meshOut.contourTris   = new List<int>();
+                m_meshOut.contourUVs    = new List<Vector2>();
             }
 
             // Collision buffers
@@ -74,6 +75,7 @@ namespace VoxelTerrain2D
             {
                 m_meshOut.contourVerts.Clear();
                 m_meshOut.contourTris.Clear();
+                m_meshOut.contourUVs.Clear();
             }
 
             if ( m_settings.generateCollision )
@@ -95,6 +97,7 @@ namespace VoxelTerrain2D
                 m_meshContour.Clear( true );
                 m_meshContour.SetVertices( m_meshOut.contourVerts );
                 m_meshContour.SetTriangles( m_meshOut.contourTris, 0, false );
+                m_meshContour.SetUVs( 0, m_meshOut.contourUVs );
             }
 
             if ( m_settings.generateCollision )

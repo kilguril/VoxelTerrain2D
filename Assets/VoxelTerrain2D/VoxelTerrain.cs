@@ -58,6 +58,12 @@ namespace VoxelTerrain2D
         [Header("Render Settings")]
         [SerializeField]
         private Material m_fillMaterial = default( Material );
+        [SerializeField]
+        private float    m_fillTileSize = default( float );
+
+        [SerializeField]
+        private Material m_outlineMaterial = default( Material );
+
 
         private ChunkedDataset< VoxelData > m_dataSource;
         private VoxelChunk[]                m_chunks;
@@ -74,6 +80,8 @@ namespace VoxelTerrain2D
             GeneratorSettings settings;
             settings.voxelSize              = m_voxelSize;
             settings.fillMaterial           = m_fillMaterial;
+            settings.fillTileSize           = m_fillTileSize;
+            settings.outlineMaterial        = m_outlineMaterial;
             settings.generateCollision      = m_generateCollider;
             settings.collisionExtrudeExtent = m_extrudeExtent;
             settings.colliderCookingOptions = m_colliderCookingOptions;
