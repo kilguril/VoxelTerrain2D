@@ -19,10 +19,13 @@ namespace VoxelTerrain2D
         protected class MeshOutput
         {
             public List< Vector3 >          verts;
+            public List< Vector3 >          normals;
             public List< int >              tris;
+            public List< Vector2 >          uvs;
             public bool[]                   batched;
 
             public List< Vector3 >          contourVerts;
+            public List< Vector3 >          contourNormals;
             public List< int >              contourTris;
             public List< Vector2 >          contourUVs;
 
@@ -45,6 +48,7 @@ namespace VoxelTerrain2D
         protected MeshCollider m_collider;
 
         protected MeshOutput   m_meshOut;
+        protected Vector3      m_worldPos;
 
         protected bool         m_init = false;
 
@@ -113,7 +117,120 @@ namespace VoxelTerrain2D
         }
 
 
+        [ContextMenu("Rebuild Mesh")]
+        public void ForceRebuildMesh()
+        {
+            m_data.dirty = true;
+        }
+
+
         protected abstract void OnInitialized();
+
+        protected void InitializeBuffers()
+        {
+            // Initialize chunk data
+            m_meshOut       = new MeshOutput();
+            m_meshOut.verts = new List<Vector3>();
+            m_meshOut.tris  = new List<int>();
+            m_meshOut.uvs   = new List<Vector2>();
+
+            if ( m_settings.generateNormals )
+            {
+                m_meshOut.normals = new List<Vector3>();
+            }
+
+            // Initialize temp buffers
+            m_meshOut.batched  = new bool[ m_data.width * m_data.height ];
+            m_meshOut.contours = new List<List<Vector2>>();
+
+            // Contour buffers
+            if ( m_settings.meshContour )
+            {
+                m_meshOut.contourVerts  = new List<Vector3>();
+                m_meshOut.contourTris   = new List<int>();
+                m_meshOut.contourUVs    = new List<Vector2>();
+
+                if ( m_settings.generateNormals ){ m_meshOut.contourNormals = new List<Vector3>(); }
+            }
+
+            // Collision buffers
+            if ( m_settings.generateCollision )
+            {
+                m_meshOut.collisionVerts = new List<Vector3>();
+                m_meshOut.collisionTris = new List<int>();
+            }
+        }
+
+
+        protected void ClearBuffers()
+        {
+            m_meshOut.verts.Clear();
+            m_meshOut.tris.Clear();
+            m_meshOut.uvs.Clear();
+
+            if ( m_settings.generateNormals )
+            {
+                m_meshOut.normals.Clear();
+            }
+
+            m_meshOut.contours.Clear();
+
+            for ( int i = 0; i < m_meshOut.batched.Length; i++ ) { m_meshOut.batched[ i ] = false; }
+
+            if ( m_settings.meshContour )
+            {
+                m_meshOut.contourVerts.Clear();
+                m_meshOut.contourTris.Clear();
+                m_meshOut.contourUVs.Clear();
+
+                if ( m_settings.generateNormals ) { m_meshOut.contourNormals.Clear(); }
+            }
+
+            if ( m_settings.generateCollision )
+            {
+                m_meshOut.collisionVerts.Clear();
+                m_meshOut.collisionTris.Clear();
+            }
+        }
+
+
+        protected void AssignMeshData()
+        {
+            m_mesh.Clear( true );
+            m_mesh.SetVertices( m_meshOut.verts );
+            m_mesh.SetTriangles( m_meshOut.tris, 0, false );
+            m_mesh.SetUVs( 0, m_meshOut.uvs );
+
+            if ( m_settings.generateNormals )
+            {
+                m_mesh.SetNormals( m_meshOut.normals );
+            }
+
+            if ( m_settings.meshContour )
+            {
+                m_meshContour.Clear( true );
+                m_meshContour.SetVertices( m_meshOut.contourVerts );
+                m_meshContour.SetTriangles( m_meshOut.contourTris, 0, false );
+                m_meshContour.SetUVs( 0, m_meshOut.contourUVs );
+
+                if ( m_settings.generateNormals )
+                {
+                    m_meshContour.SetNormals( m_meshOut.contourNormals );
+                }
+            }
+
+            if ( m_settings.generateCollision )
+            {
+                m_meshCollision.Clear( true );
+                m_meshCollision.SetVertices( m_meshOut.collisionVerts );
+                m_meshCollision.SetTriangles( m_meshOut.collisionTris, 0, false );
+
+                m_meshCollision.RecalculateBounds();
+
+                m_collider.sharedMesh = null;
+                m_collider.sharedMesh = m_meshCollision;
+            }
+        }
 
 
         protected void GenerateMesh( DataChunk i, MeshOutput o )
@@ -168,6 +285,10 @@ namespace VoxelTerrain2D
                             o.tris.Add( vcount + 1 );
                             o.tris.Add( vcount + 2 );
 
+                            o.uvs.Add( ( m_worldPos + v0 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v1 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v2 ) / m_settings.voxelSize );
+
                             AppendContour( v1, v2, o );
                         }
                         break;
@@ -190,6 +311,10 @@ namespace VoxelTerrain2D
                             o.tris.Add( vcount );
                             o.tris.Add( vcount + 1 );
                             o.tris.Add( vcount + 2 );
+
+                            o.uvs.Add( ( m_worldPos + v0 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v1 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v2 ) / m_settings.voxelSize );
 
                             AppendContour( v0, v1, o );
                         }
@@ -220,6 +345,11 @@ namespace VoxelTerrain2D
                             o.tris.Add( vcount + 2 );
                             o.tris.Add( vcount + 3 );
 
+                            o.uvs.Add( ( m_worldPos + v0 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v1 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v2 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v3 ) / m_settings.voxelSize );
+
                             AppendContour( v1, v2, o );
                         }
                         break;
@@ -242,6 +372,10 @@ namespace VoxelTerrain2D
                             o.tris.Add( vcount );
                             o.tris.Add( vcount + 1 );
                             o.tris.Add( vcount + 2 );
+
+                            o.uvs.Add( ( m_worldPos + v0 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v1 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v2 ) / m_settings.voxelSize );
 
                             AppendContour( v1, v2, o );
                         }
@@ -286,6 +420,13 @@ namespace VoxelTerrain2D
                             o.tris.Add( vcount + 3 );
                             o.tris.Add( vcount + 5 );
 
+                            o.uvs.Add( ( m_worldPos + v0 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v1 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v2 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v3 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v4 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v5 ) / m_settings.voxelSize );
+
                             AppendContour( v1, v3, o );
                             AppendContour( v5, v2, o );
                         }
@@ -315,6 +456,11 @@ namespace VoxelTerrain2D
                             o.tris.Add( vcount );
                             o.tris.Add( vcount + 2 );
                             o.tris.Add( vcount + 3 );
+
+                            o.uvs.Add( ( m_worldPos + v0 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v1 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v2 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v3 ) / m_settings.voxelSize );
 
                             AppendContour( v0, v1, o );
                         }
@@ -351,6 +497,12 @@ namespace VoxelTerrain2D
                             o.tris.Add( vcount + 2 );
                             o.tris.Add( vcount + 3 );
 
+                            o.uvs.Add( ( m_worldPos + v0 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v1 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v2 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v3 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v4 ) / m_settings.voxelSize );
+
                             AppendContour( v1, v2, o );
                         }
                         break;
@@ -373,6 +525,10 @@ namespace VoxelTerrain2D
                             o.tris.Add( vcount );
                             o.tris.Add( vcount + 1 );
                             o.tris.Add( vcount + 2 );
+
+                            o.uvs.Add( ( m_worldPos + v0 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v1 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v2 ) / m_settings.voxelSize );
 
                             AppendContour( v2, v0, o );
                         }
@@ -402,6 +558,11 @@ namespace VoxelTerrain2D
                             o.tris.Add( vcount );
                             o.tris.Add( vcount + 2 );
                             o.tris.Add( vcount + 3 );
+
+                            o.uvs.Add( ( m_worldPos + v0 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v1 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v2 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v3 ) / m_settings.voxelSize );
 
                             AppendContour( v2, v3, o );
                         }
@@ -446,6 +607,13 @@ namespace VoxelTerrain2D
                             o.tris.Add( vcount + 2 );
                             o.tris.Add( vcount + 4 );
 
+                            o.uvs.Add( ( m_worldPos + v0 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v1 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v2 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v3 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v4 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v5 ) / m_settings.voxelSize );
+
                             AppendContour( v3, v0, o );
                             AppendContour( v2, v4, o );
                         }
@@ -482,6 +650,12 @@ namespace VoxelTerrain2D
                             o.tris.Add( vcount + 3 );
                             o.tris.Add( vcount + 4 );
 
+                            o.uvs.Add( ( m_worldPos + v0 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v1 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v2 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v3 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v4 ) / m_settings.voxelSize );
+
                             AppendContour( v2, v3, o );
                         }
                         break;
@@ -510,6 +684,11 @@ namespace VoxelTerrain2D
                             o.tris.Add( vcount );
                             o.tris.Add( vcount + 2 );
                             o.tris.Add( vcount + 3 );
+
+                            o.uvs.Add( ( m_worldPos + v0 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v1 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v2 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v3 ) / m_settings.voxelSize );
 
                             AppendContour( v3, v0, o );
                         }
@@ -546,6 +725,12 @@ namespace VoxelTerrain2D
                             o.tris.Add( vcount + 1 );
                             o.tris.Add( vcount + 2 );
 
+                            o.uvs.Add( ( m_worldPos + v0 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v1 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v2 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v3 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v4 ) / m_settings.voxelSize );
+
                             AppendContour( v3, v4, o );
                         }
                         break;
@@ -581,6 +766,12 @@ namespace VoxelTerrain2D
                             o.tris.Add( vcount + 3 );
                             o.tris.Add( vcount + 4 );
 
+                            o.uvs.Add( ( m_worldPos + v0 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v1 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v2 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v3 ) / m_settings.voxelSize );
+                            o.uvs.Add( ( m_worldPos + v4 ) / m_settings.voxelSize );
+
                             AppendContour( v4, v0, o );
                         }
                         break;
@@ -612,6 +803,11 @@ namespace VoxelTerrain2D
                                 o.tris.Add( vcount );
                                 o.tris.Add( vcount + 2 );
                                 o.tris.Add( vcount + 3 );
+
+                                o.uvs.Add( ( m_worldPos + v0 ) / m_settings.voxelSize );
+                                o.uvs.Add( ( m_worldPos + v1 ) / m_settings.voxelSize );
+                                o.uvs.Add( ( m_worldPos + v2 ) / m_settings.voxelSize );
+                                o.uvs.Add( ( m_worldPos + v3 ) / m_settings.voxelSize );
                             }
                         }
                         break;
@@ -623,6 +819,14 @@ namespace VoxelTerrain2D
 
             if ( m_settings.generateCollision ){ BuildCollision( o ); }
             if ( m_settings.meshContour ){ BuildContourMesh( o ); }
+            
+            if ( m_settings.generateNormals )
+            {
+                for( int v = 0; v < o.verts.Count; v++ )
+                {
+                    o.normals.Add( Vector3.back );
+                }
+            }
         }
 
 
@@ -711,6 +915,11 @@ namespace VoxelTerrain2D
             o.tris.Add( vcount );
             o.tris.Add( vcount + 2 );
             o.tris.Add( vcount + 3 );
+
+            o.uvs.Add( ( m_worldPos + v0 ) / m_settings.voxelSize );
+            o.uvs.Add( ( m_worldPos + v1 ) / m_settings.voxelSize );
+            o.uvs.Add( ( m_worldPos + v2 ) / m_settings.voxelSize );
+            o.uvs.Add( ( m_worldPos + v3 ) / m_settings.voxelSize );
         }
 
 
@@ -894,6 +1103,14 @@ namespace VoxelTerrain2D
 
                     o.contourVerts[ vstart + 1 ] = avg2;
                     o.contourVerts[ verts - 1 ] = avg2;
+                }
+            }
+
+            if ( m_settings.generateNormals )
+            {
+                for( int v = 0; v < o.contourVerts.Count; v++ )
+                {
+                    o.contourNormals.Add( Vector3.back );
                 }
             }
         }

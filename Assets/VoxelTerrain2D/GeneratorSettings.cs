@@ -17,6 +17,7 @@ namespace VoxelTerrain2D
         public float    collisionExtrudeExtent;
         public MeshColliderCookingOptions colliderCookingOptions;
 
+        public bool     generateNormals;
         public Material fillMaterial;
         public Material outlineMaterial;
     }

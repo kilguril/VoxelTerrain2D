@@ -57,6 +57,8 @@ namespace VoxelTerrain2D
 
         [Header("Render Settings")]
         [SerializeField]
+        private bool     m_generateNormals = default( bool );
+        [SerializeField]
         private Material m_fillMaterial = default( Material );
         [SerializeField]
         private Material m_outlineMaterial = default( Material );
@@ -76,6 +78,7 @@ namespace VoxelTerrain2D
         {
             GeneratorSettings settings;
             settings.voxelSize              = m_voxelSize;
+            settings.generateNormals        = m_generateNormals;
             settings.fillMaterial           = m_fillMaterial;
             settings.outlineMaterial        = m_outlineMaterial;
             settings.generateCollision      = m_generateCollider;
