@@ -59,9 +59,6 @@ namespace VoxelTerrain2D
         [SerializeField]
         private Material m_fillMaterial = default( Material );
         [SerializeField]
-        private float    m_fillTileSize = default( float );
-
-        [SerializeField]
         private Material m_outlineMaterial = default( Material );
 
 
@@ -80,7 +77,6 @@ namespace VoxelTerrain2D
             GeneratorSettings settings;
             settings.voxelSize              = m_voxelSize;
             settings.fillMaterial           = m_fillMaterial;
-            settings.fillTileSize           = m_fillTileSize;
             settings.outlineMaterial        = m_outlineMaterial;
             settings.generateCollision      = m_generateCollider;
             settings.collisionExtrudeExtent = m_extrudeExtent;

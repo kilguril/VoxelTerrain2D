@@ -808,8 +808,6 @@ namespace VoxelTerrain2D
 
         private void BuildContourMesh( MeshOutput o )
         {
-            float uvtilesize = m_settings.fillTileSize;
-
             float inset  = m_settings.contourInset;
             float outset = m_settings.contourOutset;
             float zbias  = m_settings.contourZbias;
@@ -822,117 +820,62 @@ namespace VoxelTerrain2D
                 List< Vector2 > contour = o.contours[ i ];
                 if ( contour.Count < 2 ) { continue; }
 
-                float uvorigin = 0.0f; // TODO :: Random.value;  // Start U at random offset
-                int   vstart   = verts;
-
-                Vector2 a = contour[ 0 ];
-                Vector2 b = contour[ 1 ];
-
-                Vector2 ab = b - a;
-                Vector2 n  = new Vector2( -ab.y, ab.x ).normalized;
-
-                Vector3 p1 = a - n * inset;
-                Vector3 p2 = a + n * outset;
-                Vector3 p3 = b - n * inset;
-                Vector3 p4 = b + n * outset;
-
-                p1.z = zbias;
-                p2.z = zbias;
-                p3.z = zbias;
-                p4.z = zbias;
-
-                o.contourVerts.Add( p1 );
-                o.contourVerts.Add( p2 );
-                o.contourVerts.Add( p3 );
-                o.contourVerts.Add( p4 );
-
-                o.contourTris.Add( verts     );
-                o.contourTris.Add( verts + 1 );
-                o.contourTris.Add( verts + 2 );
-
-                o.contourTris.Add( verts + 2 );
-                o.contourTris.Add( verts + 1 );
-                o.contourTris.Add( verts + 3 );
-
-                verts += 4;
-
-                float angle = Vector2.SignedAngle( textureCutoff, ab ) + 180.0f;
-                if ( angle >= 360.0f ){ angle -= 360.0f; }
-                int face = Mathf.FloorToInt( angle / 90 );
-
-                float u0 = uvorigin;
-                float u1 = u0 + ( ab.magnitude / uvtilesize );
-                float v0 = face * 0.25f;
-                float v1 = ( face + 1 ) * 0.25f;
-
-                uvorigin = u1;
-                o.contourUVs.Add( new Vector2( u0, v0 ) );
-                o.contourUVs.Add( new Vector2( u0, v1 ) );
-                o.contourUVs.Add( new Vector2( u1, v0 ) );
-                o.contourUVs.Add( new Vector2( u1, v1 ) );
+                int vstart = verts;
 
                 // Repeat segments
-                for( int p = 1; p < contour.Count - 1; p++ )
+                for( int p = 0; p < contour.Count - 1; p++ )
                 {
-                    a = contour[ p ];
-                    b = contour[ p + 1 ];
+                    Vector2 a = contour[ p ];
+                    Vector2 b = contour[ p + 1 ];
 
-                    ab = b - a;
-                    n  = new Vector2( -ab.y, ab.x ).normalized;
+                    Vector2 ab = b - a;
+                    Vector2 n  = new Vector2( -ab.y, ab.x ).normalized;
 
-                    p1 = a - n * inset;
-                    p2 = a + n * outset;
-
-                    // Instead of fancy mitering, we'll average the shared vertices to smooth out corners a bit
-                    Vector3 avg1 = ( p1 + o.contourVerts[ verts - 2 ] ) / 2.0f;
-                    Vector3 avg2 = ( p2 + o.contourVerts[ verts - 1 ] ) / 2.0f;
-                    o.contourVerts[ verts - 2 ] = avg1;
-                    o.contourVerts[ verts - 1 ] = avg2;
-
-                    p3 = b - n * inset;
-                    p4 = b + n * outset;
+                    Vector3 p1 = a - n * inset;
+                    Vector3 p2 = a + n * outset;
+                    Vector3 p3 = b - n * inset;
+                    Vector3 p4 = b + n * outset;
 
                     p1.z = zbias;
                     p2.z = zbias;
                     p3.z = zbias;
                     p4.z = zbias;
 
-                    angle = Vector2.SignedAngle( textureCutoff, ab ) + 180.0f;
-                    if ( angle >= 360.0f ){ angle -= 360.0f; }
-                    int nextFace = Mathf.FloorToInt( angle / 90 );
-
-                    u0 = uvorigin;
-                    v0 = face * 0.25f;
-                    v1 = ( face + 1 ) * 0.25f;
-
-                    if ( nextFace != face )
+                    if ( p > 0 ) // Instead of proper mitering smooth joints by averaging vertices
                     {
-                        u0 = 0.0f; // TODO :: Random.value;
+                        p1 = ( o.contourVerts[ verts - 2 ] + p1 ) / 2.0f;
+                        p2 = ( o.contourVerts[ verts - 1 ] + p2 ) / 2.0f;
 
-                        face = nextFace;
-                        o.contourVerts.Add( avg1 );
-                        o.contourVerts.Add( avg2 );
-                        verts += 2;
-
-                        o.contourUVs.Add( new Vector2( u0, v0 ) );
-                        o.contourUVs.Add( new Vector2( u0, v1 ) );
+                        o.contourVerts[ verts - 2 ] = p1;
+                        o.contourVerts[ verts - 1 ] = p2;
                     }
 
-                    u1 = u0 + ( ab.magnitude / uvtilesize );
-                    uvorigin = u1;
-
+                    o.contourVerts.Add( p1 );
+                    o.contourVerts.Add( p2 );
                     o.contourVerts.Add( p3 );
                     o.contourVerts.Add( p4 );
-                    verts += 2;
 
-                    o.contourTris.Add( verts - 4 );
-                    o.contourTris.Add( verts - 3 );
-                    o.contourTris.Add( verts - 2 );
+                    o.contourTris.Add( verts     );
+                    o.contourTris.Add( verts + 1 );
+                    o.contourTris.Add( verts + 2 );
 
-                    o.contourTris.Add( verts - 3 );
-                    o.contourTris.Add( verts - 1 );
-                    o.contourTris.Add( verts - 2 );
+                    o.contourTris.Add( verts + 2 );
+                    o.contourTris.Add( verts + 1 );
+                    o.contourTris.Add( verts + 3 );
 
+                    verts += 4;
+
+                    float angle = Vector2.SignedAngle( textureCutoff, ab ) + 180.0f;
+                    if ( angle >= 360.0f ){ angle -= 360.0f; }
+                    int face = Mathf.FloorToInt( angle / 90 );
+
+                    float u0 = ( face == 0 || face == 2 ) ? a.x / m_settings.voxelSize : a.y / m_settings.voxelSize;
+                    float u1 = ( face == 0 || face == 2 ) ? b.x / m_settings.voxelSize : b.y / m_settings.voxelSize;
+                    float v0 = face * 0.25f;
+                    float v1 = ( face + 1 ) * 0.25f;
+
+                    o.contourUVs.Add( new Vector2( u0, v0 ) );
+                    o.contourUVs.Add( new Vector2( u0, v1 ) );
                     o.contourUVs.Add( new Vector2( u1, v0 ) );
                     o.contourUVs.Add( new Vector2( u1, v1 ) );
                 }
@@ -1019,13 +962,20 @@ namespace VoxelTerrain2D
 
                         Gizmos.DrawLine( a, b );
 
+
                         if ( m_debugContourNormals )
                         {
                             Vector2 ab = b - a;
                             Vector2 c  = a + ab / 2.0f;
                             Vector2 n  = new Vector2( -ab.y, ab.x );
+                            Vector2 d  = c + n.normalized * m_settings.voxelSize * 0.5f;
 
-                            Gizmos.DrawLine( c, c + n.normalized * m_settings.voxelSize * 0.5f );
+                            Gizmos.DrawLine( c, d );
+
+                            if ( p == 0 )
+                            {
+                                Gizmos.DrawWireSphere( d, 0.1f );
+                            }
                         }
                     }
                 }

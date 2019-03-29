@@ -18,7 +18,6 @@ namespace VoxelTerrain2D
         public MeshColliderCookingOptions colliderCookingOptions;
 
         public Material fillMaterial;
-        public float    fillTileSize;
         public Material outlineMaterial;
     }
 }
