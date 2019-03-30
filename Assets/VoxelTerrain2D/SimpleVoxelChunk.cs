@@ -7,15 +7,7 @@ namespace VoxelTerrain2D
 {
     public sealed class SimpleVoxelChunk : VoxelChunk
     {
-        protected override void OnInitialized()
-        {
-            InitializeBuffers();
-
-            // Rebuild initial state
-            RebuildMesh();
-        }
-
-        void LateUpdate()
+        public void RebuildIfNeeded()
         {
             m_worldPos = transform.position;
 
@@ -24,6 +16,21 @@ namespace VoxelTerrain2D
                 RebuildMesh();
                 m_data.dirty = false;
             }
+        }
+
+
+        protected override void OnInitialized()
+        {
+            InitializeBuffers();
+
+            // Rebuild initial state
+            m_worldPos = transform.position;
+            RebuildMesh();
+        }
+
+        void LateUpdate()
+        {
+            RebuildIfNeeded();
         }
 
         private void RebuildMesh()

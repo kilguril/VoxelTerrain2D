@@ -24,10 +24,10 @@ namespace VoxelTerrain2D
         private DataChunk< T >[]  m_data;
 
 
-        public ChunkedDataset( int w, int h, int chunkSz )
+        public ChunkedDataset( int w, int h, int chunkSz, Func< int, int, T > sample )
         { 
-            width    = w; 
-            height   = h;
+            width     = w; 
+            height    = h;
             chunkSize = chunkSz;
 
             chunkCountX = Mathf.CeilToInt( (float)( width - chunkSize ) / ( chunkSize - 1 ) ) + 1;
@@ -49,6 +49,14 @@ namespace VoxelTerrain2D
                     chunk.data   = new T[ localWidth * localHeight ];
 
                     m_data[ index ] = chunk;
+                }
+            }
+
+            for( int y = 0; y < height; y++ )
+            {
+                for( int x = 0; x < width; x++ )
+                {
+                    Set( x, y, sample( x, y ), false );
                 }
             }
         }

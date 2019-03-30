@@ -35,6 +35,8 @@ namespace VoxelTerrain2D
             public List< int >              collisionTris;
         }
 
+        public DataChunk        data { get { return m_data; } }
+
         protected DataChunk         m_data;
         protected GeneratorSettings m_settings;
 
@@ -114,13 +116,6 @@ namespace VoxelTerrain2D
 
             OnInitialized();
             m_init = true;
-        }
-
-
-        [ContextMenu("Rebuild Mesh")]
-        public void ForceRebuildMesh()
-        {
-            m_data.dirty = true;
         }
 
 

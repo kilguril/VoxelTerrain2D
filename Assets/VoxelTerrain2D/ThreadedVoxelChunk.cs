@@ -15,6 +15,8 @@ namespace VoxelTerrain2D
             InitializeBuffers();
 
             // Rebuild initial state
+            m_worldPos = transform.position;
+
             ClearBuffers();
             GenerateMesh( m_data, m_meshOut );
             AssignMeshData();

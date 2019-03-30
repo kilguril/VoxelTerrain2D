@@ -6,65 +6,35 @@ namespace VoxelTerrain2D
 {
     public class VoxelTerrain : MonoBehaviour
     {
-        public ChunkedDataset< VoxelData > dataSource { get { return m_dataSource; } }
-        public int                         width      { get { return m_width; } }
-        public int                         height     { get { return m_height; } }
-        public float                       voxelSize  { get { return m_voxelSize; } }
+        public bool                        initialized { get; private set; }
+        public VoxelTerrainData            data        { get { return m_data; } set { m_data = value; } }
+        public ChunkedDataset< VoxelData > chunkedData { get { return m_chunkedData; } }
+        public VoxelChunk[]                chunks      { get { return m_chunks; } }
+        public int                         width       { get { return m_data.width; } }
+        public int                         height      { get { return m_data.height; } }
+        public float                       voxelSize   { get { return m_settings.voxelSize; } }
 
-        [Header("General")]
+        public bool threaded   { get { return m_threadedMeshing; } set { m_threadedMeshing = value; } }
+        public bool hideChunks { get { return m_hideChunks; } set { m_hideChunks = value; } }
+
+        [SerializeField]
+        [HideInInspector]
+        private VoxelTerrainData m_data = default( VoxelTerrainData );
+        [SerializeField]
+        [Range( 2, 100 )]
+        private int m_chunkSize    = default( int );
         [SerializeField]
         private bool m_initOnAwake = default( bool );
-
         [SerializeField]
         private bool m_threadedMeshing = default( bool );
-
         [SerializeField]
         private bool m_hideChunks = default( bool );
-
-        [Header("Voxel Settings")]
+        [Space]
         [SerializeField]
-        private int m_width        = default( int );
-
-        [SerializeField]
-        private int m_height       = default( int );
-
-        [SerializeField]
-        private float m_voxelSize  = default( int );
-
-        [SerializeField]
-        [Range(3,100)]
-        private int m_chunkSize    = default( int );
-
-        [Header("Contour Settings")]
-        [SerializeField]
-        private bool m_meshContour = default( bool );
-        [SerializeField]
-        private float m_contourInset = default( float );
-        [SerializeField]
-        private float m_contourOutset = default( float );
-        [SerializeField]
-        private float m_contourZbias = default( float );
-
-        [Header("Physics Settings")]
-        [SerializeField]
-        private bool m_generateCollider = default( bool );
-
-        [SerializeField]
-        private float m_extrudeExtent = default( float );
-
-        [SerializeField]
-        private MeshColliderCookingOptions m_colliderCookingOptions = default( MeshColliderCookingOptions );
-
-        [Header("Render Settings")]
-        [SerializeField]
-        private bool     m_generateNormals = default( bool );
-        [SerializeField]
-        private Material m_fillMaterial = default( Material );
-        [SerializeField]
-        private Material m_outlineMaterial = default( Material );
+        private GeneratorSettings m_settings = default( GeneratorSettings );
 
 
-        private ChunkedDataset< VoxelData > m_dataSource;
+        private ChunkedDataset< VoxelData > m_chunkedData;
         private VoxelChunk[]                m_chunks;
    
 
@@ -76,40 +46,36 @@ namespace VoxelTerrain2D
 
         public void Initialize()
         {
-            GeneratorSettings settings;
-            settings.voxelSize              = m_voxelSize;
-            settings.generateNormals        = m_generateNormals;
-            settings.fillMaterial           = m_fillMaterial;
-            settings.outlineMaterial        = m_outlineMaterial;
-            settings.generateCollision      = m_generateCollider;
-            settings.collisionExtrudeExtent = m_extrudeExtent;
-            settings.colliderCookingOptions = m_colliderCookingOptions;
-            settings.meshContour            = m_meshContour;
-            settings.contourZbias           = m_contourZbias;
-            settings.contourInset           = m_contourInset;
-            settings.contourOutset          = m_contourOutset;
+            Initialize( m_settings );
+        }
 
-            m_dataSource = new ChunkedDataset< VoxelData >( m_width, m_height, m_chunkSize );
-            m_chunks     = new VoxelChunk[ m_dataSource.chunkCountX * m_dataSource.chunkCountY ];
 
-            for( int y = 0; y < m_dataSource.chunkCountY; y++ )
+        public void Initialize( GeneratorSettings settings )
+        {
+            if ( m_data == null ) { throw new System.ArgumentNullException( "Trying to initialize null terrain" ); }
+            
+            m_chunkedData = new ChunkedDataset< VoxelData >( m_data.width, m_data.height, m_chunkSize, m_data.Sample );
+            m_chunks      = new VoxelChunk[ m_chunkedData.chunkCountX * m_chunkedData.chunkCountY ];
+
+            for( int y = 0; y < m_chunkedData.chunkCountY; y++ )
             {
-                for( int x = 0; x < m_dataSource.chunkCountX; x++ )
+                for( int x = 0; x < m_chunkedData.chunkCountX; x++ )
                 {
-                    var chunk = m_dataSource.GetDataChunk( x, y );
+                    var chunk = m_chunkedData.GetDataChunk( x, y );
 
                     if ( chunk.width > 1 && chunk.height > 1 )
                     {
                         GameObject go = new GameObject(string.Format("Chunk[{0},{1}]", x, y ) );
                         if ( m_hideChunks ) { go.hideFlags = HideFlags.HideAndDontSave; }
+                        else { go.hideFlags = HideFlags.DontSave; }
 
                         go.transform.parent = transform;
                         go.transform.localRotation = Quaternion.identity;
                         go.transform.localScale = Vector3.one;
 
                         go.transform.localPosition = new Vector3(
-                            x * ( m_chunkSize - 1 ) * m_voxelSize,
-                            y * ( m_chunkSize - 1 ) * m_voxelSize,
+                            x * ( m_chunkSize - 1 ) * settings.voxelSize,
+                            y * ( m_chunkSize - 1 ) * settings.voxelSize,
                             0.0f
                         );
 
@@ -123,26 +89,51 @@ namespace VoxelTerrain2D
                             vchunk = go.AddComponent<SimpleVoxelChunk>();
                         }
 
-                        m_chunks[ y * m_dataSource.chunkCountX + x ] = vchunk;
+                        m_chunks[ y * m_chunkedData.chunkCountX + x ] = vchunk;
                         vchunk.Initialize( chunk, settings );
                     }
                 }
+            }
+
+            initialized = true;
+        }
+
+
+        public void Teardown()
+        {
+            if ( initialized == true )
+            {
+                if ( m_chunks != null )
+                {
+                    for ( int i = 0; i < m_chunks.Length; i++ )
+                    {
+#if UNITY_EDITOR
+                        DestroyImmediate( m_chunks[ i ].gameObject );
+#else
+                        Destroy( m_chunks[ i ].gameObject );
+#endif
+                    }
+                }
+
+                m_chunks     = null;
+                m_chunkedData = null;
+                initialized  = false;
             }
         }
 
 
         public VoxelData GetValue( int x, int y )
         {
-            return dataSource.Sample( x, y );
+            return chunkedData.Sample( x, y );
         }
 
 
         public void SetValue( int x, int y, VoxelData val )
         {
-            VoxelData original = dataSource.Sample( x, y );
+            VoxelData original = chunkedData.Sample( x, y );
             if ( original != val )
             {
-                dataSource.Set( x, y, val, true );
+                chunkedData.Set( x, y, val, true );
             }
         }
     }
