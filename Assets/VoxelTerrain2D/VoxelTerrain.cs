@@ -22,13 +22,13 @@ namespace VoxelTerrain2D
         private VoxelTerrainData m_data = default( VoxelTerrainData );
         [SerializeField]
         [Range( 2, 100 )]
-        private int m_chunkSize    = default( int );
+        private int m_chunkSize        = 20;
         [SerializeField]
-        private bool m_initOnAwake = default( bool );
+        private bool m_initOnAwake     = true;
         [SerializeField]
-        private bool m_threadedMeshing = default( bool );
+        private bool m_threadedMeshing = true;
         [SerializeField]
-        private bool m_hideChunks = default( bool );
+        private bool m_hideChunks      = true;
         [Space]
         [SerializeField]
         private GeneratorSettings m_settings = default( GeneratorSettings );
@@ -107,6 +107,8 @@ namespace VoxelTerrain2D
                 {
                     for ( int i = 0; i < m_chunks.Length; i++ )
                     {
+                        if ( m_chunks[ i ] == null || m_chunks[ i ].gameObject == null ) { continue; }
+
 #if UNITY_EDITOR
                         DestroyImmediate( m_chunks[ i ].gameObject );
 #else
