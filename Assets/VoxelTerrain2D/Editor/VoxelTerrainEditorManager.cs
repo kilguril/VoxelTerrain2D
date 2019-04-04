@@ -42,7 +42,20 @@ namespace VoxelTerrain2D.Editor
 
             EditorSceneManager.sceneOpened += OnSceneOpened;
             EditorApplication.playModeStateChanged += OnPlaymodeStateChanged;
-            Undo.undoRedoPerformed = InitializeTerrains;
+            Undo.undoRedoPerformed = () =>
+            {
+                VoxelTerrain[] terrains = Object.FindObjectsOfType< VoxelTerrain >();
+                for( int i = 0; i < terrains.Length; i++ )
+                {
+                    VoxelTerrain terrain = terrains[ i ];
+                    if ( terrain.data != null )
+                    {
+                        EditorUtility.SetDirty( terrain.data );
+                    }
+                }
+
+                InitializeTerrains();
+            };
         }
 
 

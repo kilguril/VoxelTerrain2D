@@ -114,6 +114,8 @@ namespace VoxelTerrain2D.Editor
                             Undo.RecordObject( terrain.data, string.Format( "Resize Terrain {0}", terrain.data.name ) );
                             terrain.data.Resize( m_wantedWidth, m_wantedHeight );
                             VoxelTerrainEditorManager.InitializeTerrain( terrain );
+
+                            EditorUtility.SetDirty( terrain.data );
                         }
                     }
                 }
@@ -532,6 +534,8 @@ namespace VoxelTerrain2D.Editor
                         }
                     }
                 }
+
+                EditorUtility.SetDirty( terrain.data );
             }
         }
     }
