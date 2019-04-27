@@ -2,9 +2,9 @@
 {
     public interface IWriteableDataset< T > where T : struct
     {
-        int width   { get; }
-        int height  { get; }
+        IntPoint min { get; }
+        IntPoint max { get; }
 
-        void Set( int x, int y, T val, bool flagDirty = true );
+        void Set( int x, int y, T val );
     }
 }

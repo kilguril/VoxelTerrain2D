@@ -135,7 +135,7 @@ namespace VoxelTerrain2D
             VoxelData original = chunkedData.Sample( x, y );
             if ( original != val )
             {
-                chunkedData.Set( x, y, val, true );
+                chunkedData.Set( x, y, val );
             }
         }
     }

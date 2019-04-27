@@ -9,14 +9,14 @@ namespace VoxelTerrain2D
     {
         [Header("Voxel Settings")]
         [SerializeField]
-        public float    voxelSize;
+        public float    voxelSize = 1.0f;
 
         [Header("Contour Settings")]
         [SerializeField]
-        public bool     meshContour;
-        public float    contourZbias;
-        public float    contourInset;
-        public float    contourOutset;
+        public bool     meshContour   = true;
+        public float    contourZbias  = -0.01f;
+        public float    contourInset  = 0.25f;
+        public float    contourOutset = 0.25f;
 
         [Header("Physics Settings")]
         [SerializeField]

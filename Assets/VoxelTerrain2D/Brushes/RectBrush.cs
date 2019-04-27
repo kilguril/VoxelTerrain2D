@@ -10,20 +10,20 @@ namespace VoxelTerrain2D.Brushes
         public float height { get; set; }
 
 
-        public override void Add( VoxelTerrain terrain, float x, float y )
+        public override void Add( VoxelTerrain2 terrain, float x, float y )
         {
             SetTerrainValue( terrain, x, y, true );
         }
 
 
-        public override void Subtract( VoxelTerrain terrain, float x, float y )
+        public override void Subtract( VoxelTerrain2 terrain, float x, float y )
         {
 
             SetTerrainValue( terrain, x, y, false );
         }
 
 
-        private void SetTerrainValue( VoxelTerrain terrain, float x, float y, bool add )
+        private void SetTerrainValue( VoxelTerrain2 terrain, float x, float y, bool add )
         {
             Vector2 from = new Vector2( x - width / 2.0f, y - height / 2.0f );
             Vector2 to = new Vector2( x + width / 2.0f, y + height / 2.0f );
@@ -37,14 +37,14 @@ namespace VoxelTerrain2D.Brushes
             for( int j = 0; j < maxHeight; j++ )
             {
                 int currY = firstY + j;
-                if ( currY < 0 ) { continue; }
-                if ( currY >= terrain.height ) { break; }
+                if ( currY < terrain.writeable.min.y ) { continue; }
+                if ( currY >= terrain.writeable.max.y) { break; }
 
                 for( int i = 0; i < maxWidth; i++)
                 {
                     int currX = firstX + i;
-                    if ( currX < 0 ) { continue; }
-                    if ( currX >= terrain.width ) { break; }
+                    if ( currX < terrain.writeable.min.x ) { continue; }
+                    if ( currX >= terrain.writeable.max.x ) { break; }
 
                     float px = currX * terrain.voxelSize;
                     float py = currY * terrain.voxelSize;
@@ -56,7 +56,7 @@ namespace VoxelTerrain2D.Brushes
                     {
                         if ( dx < 0.0f && dy < 0.0f )
                         {
-                            VoxelData existing = terrain.GetValue( currX, currY );
+                            VoxelData existing = terrain.readable.Sample( currX, currY );
                             VoxelData val      = default(VoxelData);
 
                             val.SetSolidState( true );
@@ -95,7 +95,7 @@ namespace VoxelTerrain2D.Brushes
                         }
                         else
                         {
-                            VoxelData existing = terrain.GetValue( currX, currY );
+                            VoxelData existing = terrain.readable.Sample( currX, currY );
 
                             if ( dy < dx )
                             {

@@ -2,8 +2,8 @@
 {
     public interface IReadableDataset< T > where T : struct
     {
-        int width   { get; }
-        int height  { get; }
+        IntPoint min { get; }
+        IntPoint max { get; }
 
         T Sample( int x, int y );
     }

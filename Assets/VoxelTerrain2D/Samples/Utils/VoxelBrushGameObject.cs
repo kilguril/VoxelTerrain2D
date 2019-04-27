@@ -47,7 +47,7 @@ namespace VoxelTerrain2D.Utils
             }
 
 
-            VoxelTerrain terrain = FindObjectOfType< VoxelTerrain >();
+            VoxelTerrain2 terrain = FindObjectOfType< VoxelTerrain2 >();
             if ( terrain == null )
             {
                 gameObject.SetActive( false );

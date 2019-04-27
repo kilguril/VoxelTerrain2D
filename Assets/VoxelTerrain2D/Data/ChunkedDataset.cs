@@ -13,13 +13,16 @@ namespace VoxelTerrain2D
             public bool dirty;
         }
 
-        public int    width      { get; private set; }
-        public int    height     { get; private set; }
+        public IntPoint min { get; private set; }
+        public IntPoint max { get; private set; }
 
         public int    chunkCountX { get; private set; }
         public int    chunkCountY { get; private set; }
         
         public int    chunkSize   { get; private set; }
+
+        int width;
+        int height;
 
         private DataChunk< T >[]  m_data;
 
@@ -28,6 +31,10 @@ namespace VoxelTerrain2D
         { 
             width     = w; 
             height    = h;
+
+            min = new IntPoint { x = 0, y = 0 };
+            max = new IntPoint { x = width, y = height };
+
             chunkSize = chunkSz;
 
             chunkCountX = Mathf.CeilToInt( (float)( width - chunkSize ) / ( chunkSize - 1 ) ) + 1;
@@ -56,7 +63,7 @@ namespace VoxelTerrain2D
             {
                 for( int x = 0; x < width; x++ )
                 {
-                    Set( x, y, sample( x, y ), false );
+                    Set( x, y, sample( x, y ) );
                 }
             }
         }
@@ -80,7 +87,7 @@ namespace VoxelTerrain2D
         }
 
 
-        public void Set( int x, int y, T val, bool flagDirty = true )
+        public void Set( int x, int y, T val )
         {
             bool lineX  = false, lineY = false;
             int  chunkX = 0, chunkY = 0;
@@ -105,8 +112,6 @@ namespace VoxelTerrain2D
             DataChunk< T > chunk = m_data[ chunkY * chunkCountX + chunkX ];
             chunk.data[ localY * chunk.width + localX ] = val;
 
-            if ( flagDirty ) { chunk.dirty = true; }
-
             if ( lineX == true )
             {
                 int lx = x - ( ( chunkX - 1 ) * ( chunkSize - 1 ) );
@@ -114,8 +119,6 @@ namespace VoxelTerrain2D
 
                 DataChunk< T > c = m_data[ chunkY * chunkCountX + ( chunkX - 1 ) ];
                 c.data[ ly * c.width + lx ] = val;
-
-                if ( flagDirty ) { c.dirty = true; }
             }
             
             if ( lineY == true )
@@ -125,8 +128,6 @@ namespace VoxelTerrain2D
 
                 DataChunk< T > c = m_data[ ( chunkY - 1 ) * chunkCountX + chunkX ];
                 c.data[ ly * c.width + lx ] = val;
-
-                if ( flagDirty ) { c.dirty = true; }
             }
 
             if ( lineX == true && lineY == true )
@@ -136,8 +137,6 @@ namespace VoxelTerrain2D
 
                 DataChunk< T > c = m_data[ ( chunkY - 1 ) * chunkCountX + ( chunkX - 1 ) ];
                 c.data[ ly * c.width + lx ] = val;
-
-                if ( flagDirty ) { c.dirty = true; }
             }
         }
 

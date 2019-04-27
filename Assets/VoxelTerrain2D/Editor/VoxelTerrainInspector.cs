@@ -444,16 +444,16 @@ namespace VoxelTerrain2D.Editor
                     m_rectBrush.width = m_rectWidth;
                     m_rectBrush.height = m_rectHeight;
 
-                    if ( add ) { m_rectBrush.Add( terrain, x, y ); }
-                    else { m_rectBrush.Subtract( terrain, x, y ); }
+                    //if ( add ) { m_rectBrush.Add( terrain, x, y ); }
+                    //else { m_rectBrush.Subtract( terrain, x, y ); }
                 }
                 break;
 
                 case Brush.Circle:
                 {
                     m_circleBrush.radius = m_radius;
-                    if ( add ) { m_circleBrush.Add( terrain, x, y ); }
-                    else{ m_circleBrush.Subtract( terrain, x, y ); }
+                    //if ( add ) { m_circleBrush.Add( terrain, x, y ); }
+                    //else{ m_circleBrush.Subtract( terrain, x, y ); }
                 }
                 break;
             }
@@ -477,8 +477,8 @@ namespace VoxelTerrain2D.Editor
             m_rectBrush.width = w;
             m_rectBrush.height = h;
 
-            if ( add ) { m_rectBrush.Add( terrain, x, y ); }
-            else { m_rectBrush.Subtract( terrain, x, y ); }
+            //if ( add ) { m_rectBrush.Add( terrain, x, y ); }
+            //else { m_rectBrush.Subtract( terrain, x, y ); }
 
             CommitChanges( terrain );
         }
