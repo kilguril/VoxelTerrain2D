@@ -1,13 +1,24 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using UnityEngine;
-
-using DataChunk = VoxelTerrain2D.ChunkedDataset< VoxelTerrain2D.VoxelData >.DataChunk< VoxelTerrain2D.VoxelData >;
 
 namespace VoxelTerrain2D
 {
-    public abstract class VoxelChunk : MonoBehaviour
+    public class VoxelChunk : MonoBehaviour
     {
+        public static VoxelChunk Create( Transform parent, string name, GeneratorSettings settings, int maxWidth, int maxHeight )
+        {
+            GameObject  go    = new GameObject( name );
+            go.transform.SetParent( parent, false );
+
+            VoxelChunk chunk = go.AddComponent< VoxelChunk >();
+            chunk.Initialize( settings, maxWidth, maxHeight );
+
+            return chunk;
+        }
+
+
         #if UNITY_EDITOR
         [SerializeField]
         private bool m_debugContour = default( bool );
@@ -35,43 +46,39 @@ namespace VoxelTerrain2D
             public List< int >              collisionTris;
         }
 
-        public DataChunk        data { get { return m_data; } }
+        public    Vector3           nextPosition { get; set; }
 
-        protected DataChunk         m_data;
         protected GeneratorSettings m_settings;
 
-        protected Mesh         m_mesh;
-        protected MeshRenderer m_renderer;
+        protected Mesh              m_mesh;
+        protected MeshRenderer      m_renderer;
 
-        protected Mesh         m_meshContour;
-        protected MeshRenderer m_rendererContour;
+        protected Mesh              m_meshContour;
+        protected MeshRenderer      m_rendererContour;
 
-        protected Mesh         m_meshCollision;
-        protected MeshCollider m_collider;
+        protected Mesh              m_meshCollision;
+        protected MeshCollider      m_collider;
 
-        protected MeshOutput   m_meshOut;
-        protected Vector3      m_worldPos;
+        protected MeshOutput        m_meshOut;
+        protected Vector3           m_worldPos;
 
-        protected bool         m_init = false;
+        private Task                m_rebuildTask;
+        private int                 m_maxWidth;
+        private int                 m_maxHeight;
 
 
-
-        public void Initialize( DataChunk dataset, GeneratorSettings settings )
+        public void Initialize( GeneratorSettings settings, int maxWidth, int maxHeight )
         {
-            m_data     = dataset;
-            m_settings = settings;
+            nextPosition = transform.position;
+
+            m_maxWidth  = maxWidth;
+            m_maxHeight = maxHeight;
+            m_settings  = settings;
 
             // Initialize mesh
             m_mesh      = new Mesh();
             m_mesh.name = name + "_Mesh";
             m_mesh.MarkDynamic();
-
-            float meshSizeX = dataset.width * m_settings.voxelSize;
-            float meshSizeY = dataset.height * m_settings.voxelSize;
-            m_mesh.bounds = new Bounds(
-                new Vector3( meshSizeX / 2.0f, meshSizeY / 2.0f ),
-                new Vector3( meshSizeX, meshSizeY )
-            );
 
             MeshFilter filter = gameObject.AddComponent< MeshFilter >();
             m_renderer        = gameObject.AddComponent< MeshRenderer >();
@@ -114,15 +121,6 @@ namespace VoxelTerrain2D
                 m_rendererContour.sharedMaterial = settings.outlineMaterial;
             }
 
-            OnInitialized();
-            m_init = true;
-        }
-
-
-        protected abstract void OnInitialized();
-
-        protected void InitializeBuffers()
-        {
             // Initialize chunk data
             m_meshOut       = new MeshOutput();
             m_meshOut.verts = new List<Vector3>();
@@ -135,7 +133,7 @@ namespace VoxelTerrain2D
             }
 
             // Initialize temp buffers
-            m_meshOut.batched  = new bool[ m_data.width * m_data.height ];
+            m_meshOut.batched  = new bool[ m_maxWidth * m_maxHeight ];
             m_meshOut.contours = new List<List<Vector2>>();
 
             // Contour buffers
@@ -157,7 +155,38 @@ namespace VoxelTerrain2D
         }
 
 
-        protected void ClearBuffers()
+        public void Rebuild( IReadableDataset< VoxelData > data, IntRect region )
+        {
+            if ( region.size.x <= 0 || region.size.y <= 0 )
+            {
+                ClearBuffers();
+                AssignMeshData();
+                transform.position = nextPosition;
+                return;
+            }
+
+            m_rebuildTask = new Task(()=>{ 
+                ClearBuffers();
+                GenerateMesh( data, region, m_meshOut );
+            });
+            m_rebuildTask.Start();
+        }
+
+
+        void Update()
+        {
+            if ( m_rebuildTask != null )
+            {
+                m_rebuildTask.Wait();
+                m_rebuildTask = null;
+
+                AssignMeshData();
+                transform.position = nextPosition;
+            }
+        }
+
+
+        private void ClearBuffers()
         {
             m_meshOut.verts.Clear();
             m_meshOut.tris.Clear();
@@ -189,7 +218,7 @@ namespace VoxelTerrain2D
         }
 
 
-        protected void AssignMeshData()
+        private void AssignMeshData()
         {
             m_mesh.Clear( true );
             m_mesh.SetVertices( m_meshOut.verts );
@@ -228,23 +257,20 @@ namespace VoxelTerrain2D
         }
 
 
-        protected void GenerateMesh( DataChunk i, MeshOutput o )
+        private void GenerateMesh( IReadableDataset< VoxelData > data, IntRect region, MeshOutput o )
         {
-            VoxelData[] dataset = i.data;
-            int   dataWidth     = i.width;
-            int   dataHeight    = i.height;
-            float voxelSize     = m_settings.voxelSize;
+            float voxelSize = m_settings.voxelSize;
 
-            for( int y = 0; y < dataHeight - 1; y++ )
+            for( int y = 0; y < region.size.y - 1; y++ )
             {
-                for( int x = 0; x < dataWidth - 1; x++ )
+                for( int x = 0; x < region.size.x - 1; x++ )
                 {
-                    if ( o.batched[ y * dataWidth + x ] == true ) { continue; } // Cell is already a part of existing batch, skip it...
+                    if ( o.batched[ y * m_maxWidth + x ] == true ) { continue; } // Cell is already a part of existing batch, skip it...
 
-                    VoxelData bottomLeft  = dataset[ y * dataWidth + x ];              // v = 1
-                    VoxelData bottomRight = dataset[ y * dataWidth + x + 1];           // v = 2
-                    VoxelData topRight    = dataset[ ( y + 1 ) * dataWidth + x + 1 ];  // v = 4
-                    VoxelData topLeft     = dataset[ ( y + 1 ) * dataWidth + x ];      // v = 8
+                    VoxelData bottomLeft  = data.Sample( region.origin.x + x, region.origin.y + y );          // v = 1
+                    VoxelData bottomRight = data.Sample( region.origin.x + x + 1, region.origin.y + y );      // v = 2
+                    VoxelData topRight    = data.Sample( region.origin.x + x + 1, region.origin.y + y + 1 );  // v = 4
+                    VoxelData topLeft     = data.Sample( region.origin.x + x, region.origin.y + y + 1 );      // v = 8
 
                     byte index = 0;
                     if ( ( bottomLeft.cell & VoxelData.CELL_MASK_SOLID ) > 0 ) { index |= ( 1 << 0 ); }
@@ -775,7 +801,7 @@ namespace VoxelTerrain2D
                         {
                             if ( topLeft.CompareWithoutExtent( bottomLeft ) && topRight.CompareWithoutExtent( bottomRight ) && bottomLeft.CompareWithoutExtent( bottomRight ) )
                             {
-                                GenerateGreedyQuad( i, x, y, o );
+                                GenerateGreedyQuad( data, region, x, y, o );
                             }
                             else
                             {
@@ -825,26 +851,23 @@ namespace VoxelTerrain2D
         }
 
 
-        private void GenerateGreedyQuad( DataChunk i, int x, int y, MeshOutput o )
+        private void GenerateGreedyQuad( IReadableDataset< VoxelData > data, IntRect region, int x, int y, MeshOutput o )
         {
-            VoxelData[] dataset = i.data;
-            int   dataWidth     = i.width;
-            int   dataHeight    = i.height;
-            float voxelSize     = m_settings.voxelSize;
+            float voxelSize = m_settings.voxelSize;
 
             int startX = x;
             int startY = y;
             int endX   = x;
             int endY   = y;
 
-            VoxelData   compare   = dataset[ y * dataWidth + x ];
+            VoxelData compare = data.Sample( region.origin.x + x, region.origin.y + y );
 
-            for( int xx = x + 1; xx < dataWidth - 1; xx++ )
+            for( int xx = x + 1; xx < region.size.x - 1; xx++ )
             {
-                if ( o.batched[ y * dataWidth + xx ] == true ) { break; } // Encountered another batch, stop expanding
+                if ( o.batched[ y * m_maxWidth + xx ] == true ) { break; } // Encountered another batch, stop expanding
 
-                VoxelData a = dataset[ y * dataWidth + xx + 1];
-                VoxelData b = dataset[ ( y + 1 ) * dataWidth + xx + 1 ];
+                VoxelData a = data.Sample( region.origin.x + xx + 1, region.origin.y + y );
+                VoxelData b = data.Sample( region.origin.x + xx + 1, region.origin.y + y + 1 );
 
                 if ( compare.CompareWithoutExtent( a ) && compare.CompareWithoutExtent( b ) )
                 {
@@ -854,14 +877,14 @@ namespace VoxelTerrain2D
             }
 
             bool validUp = true;
-            for( int yy = y + 1; yy < dataHeight - 1 && validUp == true; yy++ )
+            for( int yy = y + 1; yy < region.size.y - 1 && validUp == true; yy++ )
             {
                 for( int xx = startX; xx <= endX && validUp == true; xx++ )
                 {
-                    if ( o.batched[ yy * dataWidth + xx ] == true ) { validUp = false; break; } // Encountered another batch, stop expanding
+                    if ( o.batched[ yy * m_maxWidth + xx ] == true ) { validUp = false; break; } // Encountered another batch, stop expanding
 
-                    VoxelData a = dataset[ ( yy + 1 ) * dataWidth + xx + 1 ];
-                    VoxelData b = dataset[ ( yy + 1 ) * dataWidth + xx ];
+                    VoxelData a = data.Sample( region.origin.x + xx + 1, region.origin.y + yy + 1 );
+                    VoxelData b = data.Sample( region.origin.x + xx, region.origin.y + yy + 1 );
 
                     if ( compare.CompareWithoutExtent( a ) == false || compare.CompareWithoutExtent( b ) == false )
                     {
@@ -881,7 +904,7 @@ namespace VoxelTerrain2D
             {
                 for ( int xx = startX; xx <= endX; xx++ )
                 {
-                    o.batched[ yy * dataWidth + xx ] = true;
+                    o.batched[ yy * m_maxWidth + xx ] = true;
                 }
             }
 

@@ -9,20 +9,20 @@ namespace VoxelTerrain2D.Brushes
         public float radius  { get; set; }
 
 
-        public override void Add( VoxelTerrain2 terrain, float x, float y )
+        public override void Add( VoxelTerrain terrain, float x, float y )
         {
             SetTerrainValue( terrain, x, y, true );
         }
 
 
-        public override void Subtract( VoxelTerrain2 terrain, float x, float y )
+        public override void Subtract( VoxelTerrain terrain, float x, float y )
         {
 
             SetTerrainValue( terrain, x, y, false );
         }
 
 
-        private void SetTerrainValue( VoxelTerrain2 terrain, float x, float y, bool add )
+        private void SetTerrainValue( VoxelTerrain terrain, float x, float y, bool add )
         {
             float vsize2 = terrain.voxelSize * 2.0f;
 

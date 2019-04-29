@@ -4,7 +4,7 @@ using UnityEngine;
 
 using VoxelTerrain2D.Brushes;
 
-namespace VoxelTerrain2D.Utils
+namespace VoxelTerrain2D.Samples.Utils
 {
     public class VoxelBrushGameObject : MonoBehaviour
     {
@@ -47,7 +47,7 @@ namespace VoxelTerrain2D.Utils
             }
 
 
-            VoxelTerrain2 terrain = FindObjectOfType< VoxelTerrain2 >();
+            VoxelTerrain terrain = FindObjectOfType< VoxelTerrain >();
             if ( terrain == null )
             {
                 gameObject.SetActive( false );

@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace VoxelTerrain2D.Utils
+namespace VoxelTerrain2D.Samples.Utils
 {
     public class CameraControls : MonoBehaviour
     {
