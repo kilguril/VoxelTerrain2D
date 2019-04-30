@@ -1,5 +1,4 @@
-﻿using System.Collections;
-using System.Collections.Generic;
+﻿using System;
 using UnityEngine;
 
 namespace VoxelTerrain2D.Brushes
@@ -8,48 +7,58 @@ namespace VoxelTerrain2D.Brushes
     {
         public float radius  { get; set; }
 
+        private float    m_voxelSize;
+        private IntPoint m_min;
+        private IntPoint m_max;
 
-        public override void Add( VoxelTerrain terrain, float x, float y )
+        public CircleBrush( float voxelSize, IntPoint lowerBounds, IntPoint upperBounds, Func< int, int, VoxelData > readMethod, Action< int, int, VoxelData > writeMethod ) : base( readMethod, writeMethod )
         {
-            SetTerrainValue( terrain, x, y, true );
+            m_voxelSize = voxelSize;
+            m_min = lowerBounds;
+            m_max = upperBounds;
+        }
+
+        public override void Add( float x, float y )
+        {
+            SetTerrainValue( x, y, true );
         }
 
 
-        public override void Subtract( VoxelTerrain terrain, float x, float y )
+        public override void Subtract( float x, float y )
         {
 
-            SetTerrainValue( terrain, x, y, false );
+            SetTerrainValue( x, y, false );
         }
 
 
-        private void SetTerrainValue( VoxelTerrain terrain, float x, float y, bool add )
+        private void SetTerrainValue( float x, float y, bool add )
         {
-            float vsize2 = terrain.voxelSize * 2.0f;
+            float vsize2 = m_voxelSize * 2.0f;
 
             Vector2 from  = new Vector2( x - radius - vsize2, y - radius - vsize2 );
             Vector2 to    = new Vector2( x + radius + vsize2, y + radius + vsize2 );
             Vector2 center = new Vector2( x, y );
 
-            int maxWidth  = Mathf.CeilToInt( ( to.x - from.x ) / terrain.voxelSize );
-            int maxHeight = Mathf.CeilToInt( ( to.y - from.y ) / terrain.voxelSize );
+            int maxWidth  = Mathf.CeilToInt( ( to.x - from.x ) / m_voxelSize );
+            int maxHeight = Mathf.CeilToInt( ( to.y - from.y ) / m_voxelSize );
 
-            int firstX = Mathf.RoundToInt( from.x / terrain.voxelSize );
-            int firstY = Mathf.RoundToInt( from.y / terrain.voxelSize );
+            int firstX = Mathf.RoundToInt( from.x / m_voxelSize );
+            int firstY = Mathf.RoundToInt( from.y / m_voxelSize );
 
             for ( int j = 0; j < maxHeight; j++ )
             {
                 int currY = firstY + j;
-                if ( currY < terrain.writeable.min.y ) { continue; }
-                if ( currY >= terrain.writeable.max.y ) { break; }
+                if ( currY < m_min.y ) { continue; }
+                if ( currY >= m_max.y ) { break; }
 
                 for ( int i = 0; i < maxWidth; i++ )
                 {
                     int currX = firstX + i;
-                    if ( currX < terrain.writeable.min.x ) { continue; }
-                    if ( currX >= terrain.writeable.max.x ) { break; }
+                    if ( currX < m_min.x ) { continue; }
+                    if ( currX >= m_max.x ) { break; }
 
-                    float px = currX * terrain.voxelSize;
-                    float py = currY * terrain.voxelSize;
+                    float px = currX * m_voxelSize;
+                    float py = currY * m_voxelSize;
 
                     Vector2 p = new Vector2( px, py );
                     float d = ( p - center ).magnitude;
@@ -58,12 +67,12 @@ namespace VoxelTerrain2D.Brushes
                     {
                         if ( d <= radius )
                         {
-                            VoxelData existing = terrain.readable.Sample( currX, currY );
+                            VoxelData existing = read( currX, currY );
                             VoxelData val      = default(VoxelData);
 
                             val.SetSolidState( true );
 
-                            if ( d < radius - terrain.voxelSize )
+                            if ( d < radius - m_voxelSize )
                             {
                                 val.SetExtentHorizontal( 15, 15 );
                                 val.SetExtentVertical( 15, 15 );
@@ -76,21 +85,21 @@ namespace VoxelTerrain2D.Brushes
                                 IntersectCircle( p, p + Vector2.up, center, radius, out up, out down );
                                 IntersectCircle( p, p + Vector2.left, center, radius, out left, out right );
 
-                                byte eleft  = (byte)( Mathf.Clamp01( ( p.x - left.x) / terrain.voxelSize ) * VoxelData.EXTENT_MAX_RESOLUTION );
-                                byte eright = (byte)( Mathf.Clamp01( ( right.x - p.x ) / terrain.voxelSize ) * VoxelData.EXTENT_MAX_RESOLUTION );
-                                byte etop   = (byte)( Mathf.Clamp01( ( up.y - p.y ) / terrain.voxelSize ) * VoxelData.EXTENT_MAX_RESOLUTION );
-                                byte ebot   = (byte)( Mathf.Clamp01( ( p.y - down.y ) / terrain.voxelSize ) * VoxelData.EXTENT_MAX_RESOLUTION );
+                                byte eleft  = (byte)( Mathf.Clamp01( ( p.x - left.x) / m_voxelSize ) * VoxelData.EXTENT_MAX_RESOLUTION );
+                                byte eright = (byte)( Mathf.Clamp01( ( right.x - p.x ) / m_voxelSize ) * VoxelData.EXTENT_MAX_RESOLUTION );
+                                byte etop   = (byte)( Mathf.Clamp01( ( up.y - p.y ) / m_voxelSize ) * VoxelData.EXTENT_MAX_RESOLUTION );
+                                byte ebot   = (byte)( Mathf.Clamp01( ( p.y - down.y ) / m_voxelSize ) * VoxelData.EXTENT_MAX_RESOLUTION );
 
-                                eleft  = System.Math.Max( eleft, existing.GetExtentLeft() );
-                                eright = System.Math.Max( eright, existing.GetExtentRight() );
-                                etop   = System.Math.Max( etop, existing.GetExtentTop() );
-                                ebot   = System.Math.Max( ebot, existing.GetExtentBottom() );
+                                eleft  = Math.Max( eleft, existing.GetExtentLeft() );
+                                eright = Math.Max( eright, existing.GetExtentRight() );
+                                etop   = Math.Max( etop, existing.GetExtentTop() );
+                                ebot   = Math.Max( ebot, existing.GetExtentBottom() );
 
                                 val.SetExtentHorizontal( eleft, eright );
                                 val.SetExtentVertical( ebot, etop );
                             }
 
-                            terrain.SetValue( currX, currY, val );
+                            write( currX, currY, val );
                         }
                     }
                     else
@@ -103,11 +112,11 @@ namespace VoxelTerrain2D.Brushes
                             val.SetExtentHorizontal( 0, 0 );
                             val.SetExtentVertical( 0, 0 );
 
-                            terrain.SetValue( currX, currY, val );
+                            write( currX, currY, val );
                         }
-                        else if ( d <= radius + terrain.voxelSize )
+                        else if ( d <= radius + m_voxelSize )
                         {
-                            VoxelData existing = terrain.readable.Sample( currX, currY );
+                            VoxelData existing = read( currX, currY );
 
                             int i1 = 0, i2 = 0;
                             Vector2 up = default( Vector2 ), down = default( Vector2 );
@@ -129,11 +138,11 @@ namespace VoxelTerrain2D.Brushes
 
                                 if ( p.y < topbot.y )
                                 {
-                                    etop = System.Math.Min( etop, (byte)( Mathf.Clamp01( Mathf.Abs( topbot.y - p.y ) / terrain.voxelSize ) * VoxelData.EXTENT_MAX_RESOLUTION ) );
+                                    etop = Math.Min( etop, (byte)( Mathf.Clamp01( Mathf.Abs( topbot.y - p.y ) / m_voxelSize ) * VoxelData.EXTENT_MAX_RESOLUTION ) );
                                 }
                                 else if ( p.y > topbot.y )
                                 {
-                                    ebot = System.Math.Min( ebot, (byte)( Mathf.Clamp01( Mathf.Abs( topbot.y - p.y ) / terrain.voxelSize ) * VoxelData.EXTENT_MAX_RESOLUTION ) );
+                                    ebot = Math.Min( ebot, (byte)( Mathf.Clamp01( Mathf.Abs( topbot.y - p.y ) / m_voxelSize ) * VoxelData.EXTENT_MAX_RESOLUTION ) );
                                 }
                             }
 
@@ -145,17 +154,17 @@ namespace VoxelTerrain2D.Brushes
 
                                 if ( p.x < leftright.x )
                                 {
-                                    eright = System.Math.Min( eright, (byte)( Mathf.Clamp01( Mathf.Abs( leftright.x - p.x ) / terrain.voxelSize ) * VoxelData.EXTENT_MAX_RESOLUTION ) );
+                                    eright = Math.Min( eright, (byte)( Mathf.Clamp01( Mathf.Abs( leftright.x - p.x ) / m_voxelSize ) * VoxelData.EXTENT_MAX_RESOLUTION ) );
                                 }
                                 else if ( p.x > leftright.x )
                                 {
-                                    eleft = System.Math.Min( eleft, (byte)( Mathf.Clamp01( Mathf.Abs( leftright.x - p.x ) / terrain.voxelSize ) * VoxelData.EXTENT_MAX_RESOLUTION ) );
+                                    eleft = Math.Min( eleft, (byte)( Mathf.Clamp01( Mathf.Abs( leftright.x - p.x ) / m_voxelSize ) * VoxelData.EXTENT_MAX_RESOLUTION ) );
                                 }
                             }
 
                             existing.SetExtentHorizontal( eleft, eright );
                             existing.SetExtentVertical( ebot, etop );
-                            terrain.SetValue( currX, currY, existing );
+                            write( currX, currY, existing );
                         }
                     }
                 }

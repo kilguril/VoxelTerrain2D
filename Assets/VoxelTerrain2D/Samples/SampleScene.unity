@@ -287,6 +287,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f354d6eb5235a9742b9bcfebc69224b3, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  m_terrain: {fileID: 971197184}
   m_rectMarker: {fileID: 196495430}
   m_circleMarker: {fileID: 885914490}
 --- !u!4 &681945135
@@ -341,8 +342,8 @@ Camera:
   m_GameObject: {fileID: 753888717}
   m_Enabled: 1
   serializedVersion: 2
-  m_ClearFlags: 1
-  m_BackGroundColor: {r: 0.19215687, g: 0.3019608, b: 0.4745098, a: 0}
+  m_ClearFlags: 2
+  m_BackGroundColor: {r: 0, g: 0, b: 0, a: 0}
   m_projectionMatrixMode: 1
   m_SensorSize: {x: 36, y: 24}
   m_LensShift: {x: 0, y: 0}
@@ -527,8 +528,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 500368f622a71e04eaace5e6c6981b7a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_renderSize: {x: 46, y: 30}
-  m_chunkSize: 10
+  m_renderSize: {x: 150, y: 100}
+  m_chunkSize: 25
   m_settings:
     voxelSize: 1
     meshContour: 1

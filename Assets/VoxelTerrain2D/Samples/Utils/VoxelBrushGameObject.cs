@@ -9,6 +9,9 @@ namespace VoxelTerrain2D.Samples.Utils
     public class VoxelBrushGameObject : MonoBehaviour
     {
         [SerializeField]
+        private VoxelTerrain m_terrain = default( VoxelTerrain );
+
+        [SerializeField]
         private GameObject m_rectMarker = default( GameObject );
         [SerializeField]
         private GameObject m_circleMarker = default( GameObject );
@@ -16,6 +19,8 @@ namespace VoxelTerrain2D.Samples.Utils
         private bool m_rectMode;
         RectBrush    m_rectBrush;
         CircleBrush  m_circleBrush;
+
+        private VoxelTerrain m_initTerrain;
 
         void Awake()
         {
@@ -29,32 +34,20 @@ namespace VoxelTerrain2D.Samples.Utils
                 m_rectMarker.SetActive( true );
             }
 
-            m_rectMode          = true;
-
-            m_rectBrush         = new RectBrush();
-            m_rectBrush.width   = 1.0f;
-            m_rectBrush.height  = 1.0f;
-
-            m_circleBrush        = new CircleBrush();
-            m_circleBrush.radius = 0.5f;
+            m_rectMode = true;
         }
 
         void Update()
         {
+            if ( m_initTerrain != m_terrain ){ InitForTerrain( m_terrain ); }
+            if ( m_initTerrain == null ) { return; }
+
             if ( Input.GetMouseButtonDown( 2 ) )
             {
                 ToggleMode();
             }
 
-
-            VoxelTerrain terrain = FindObjectOfType< VoxelTerrain >();
-            if ( terrain == null )
-            {
-                gameObject.SetActive( false );
-                return;
-            }
-
-            transform.rotation = terrain.transform.rotation;
+            transform.rotation = m_terrain.transform.rotation;
 
             Camera cam = Camera.main;
             if ( cam == null )
@@ -67,7 +60,7 @@ namespace VoxelTerrain2D.Samples.Utils
                 }
             }
 
-            Plane plane = new Plane( terrain.transform.forward, terrain.transform.position );
+            Plane plane = new Plane( m_terrain.transform.forward, m_terrain.transform.position );
             
             Vector3 mouse = Input.mousePosition;
             Ray     ray   = cam.ScreenPointToRay( mouse );
@@ -101,30 +94,49 @@ namespace VoxelTerrain2D.Samples.Utils
             transform.localScale = new Vector3( scaleX, scaleY, transform.localScale.z );
 
 
-            Vector3 relativePosition = terrain.transform.InverseTransformPoint( transform.position );
+            Vector3 relativePosition = m_terrain.transform.InverseTransformPoint( transform.position );
 
             if ( Input.GetMouseButton( 0 ) )
             {
                 if ( m_rectMode )
                 {
-                    m_rectBrush.Add( terrain, relativePosition.x, relativePosition.y );
+                    m_rectBrush.Add( relativePosition.x, relativePosition.y );
                 }
                 else
                 {
-                    m_circleBrush.Add( terrain, relativePosition.x, relativePosition.y );
+                    m_circleBrush.Add( relativePosition.x, relativePosition.y );
                 }
             }
             else if ( Input.GetMouseButton( 1 ) )
             {
                 if ( m_rectMode )
                 {
-                    m_rectBrush.Subtract( terrain, relativePosition.x, relativePosition.y );
+                    m_rectBrush.Subtract( relativePosition.x, relativePosition.y );
                 }
                 else
                 {
-                    m_circleBrush.Subtract( terrain, relativePosition.x, relativePosition.y );
+                    m_circleBrush.Subtract( relativePosition.x, relativePosition.y );
                 }
             }
+        }
+
+
+        private void InitForTerrain( VoxelTerrain terrain )
+        {
+            if ( terrain == null ) { m_initTerrain = null; return; }
+            if ( terrain.readable == null ) { return; }
+            if ( terrain.writeable == null ) { return; }
+
+            m_initTerrain = terrain;
+
+            if ( terrain == null ) { return; }
+
+            m_rectBrush         = new RectBrush( terrain.voxelSize, terrain.readable.min, terrain.readable.max, terrain.readable.Sample, terrain.SetValue );
+            m_rectBrush.width   = 1.0f;
+            m_rectBrush.height  = 1.0f;
+
+            m_circleBrush        = new CircleBrush( terrain.voxelSize, terrain.readable.min, terrain.readable.max, terrain.readable.Sample, terrain.SetValue );
+            m_circleBrush.radius = 0.5f;
         }
 
 
